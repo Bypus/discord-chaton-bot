@@ -1,9 +1,10 @@
-"""
 __**Aide pour ProxiLEWD**__
 ```
-La seule principale fonction pour l'instant est de connaitre une sauce à l'aide de son numéro, comme ceci :
+- La principale fonction est de connaitre une sauce à l'aide de son numéro, comme ceci :
 		(sauce)
 La sauce sera affichée dans #nsfw-shitpost.
-Vous pouvez aussi lui envoyer un message privé si vous ne souhaitez pas partager vos fétiches avec les autres membres du serveur.
-Vous pouvez également lui dire $hello et il vous répondra.
-Les commandes dans le futur auront pour préfixe $```"""
+Vous pouvez lui envoyer un message privé si vous ne souhaitez pas partager vos fétiches avec les autres membres du serveur.
+- Vous pouvez également lui dire $hello et il vous répondra.
+Les commandes dans le futur auront pour préfixe $
+En fait non 
+- Pour afficher un emoji en gros, entrez 'n. <emoji>'```
