@@ -1,0 +1,170 @@
+import discord
+from discord.ext import tasks
+
+import re
+import io
+import aiohttp
+import json
+import nhentai
+import asyncio
+import random
+
+from discord.ext import commands
+
+client = discord.Client()
+with open('auth.json', 'r') as auth_file:
+	data = auth_file.read()
+
+auth = json.loads(data)
+
+# nhentai = new nhentaiAPI(true);
+# https = require('https');
+
+# cron = require('cron');
+
+testing = 0
+
+prefix = '('
+suffix = ')'
+
+if (testing):
+	prefix = '-'
+	suffix =  '-'
+
+def get_book(sauce, emoji):
+	book = nhentai.Doujinshi(sauce)
+
+	embed=discord.Embed(title=book.name, url="https://nhentai.net/g/" + str(sauce), color=0x80BA25)
+	embed.set_author(name='(' + str(sauce) + ')')
+	embed.set_thumbnail(url=str(book.cover))
+	if book.parodies:
+		embed.add_field(name="Parodies", value=book.parodies[:-2], inline=False)
+	if book.characters:
+		embed.add_field(name="Characters", value=book.characters[:-2], inline=False)
+	if book.yes == "YES":
+		embed.add_field(name="Tags " + str(emoji), value=book.tags[:-2], inline=False)
+	else:
+		embed.add_field(name="Tags", value=book.tags[:-2], inline=False)
+	if book.artists:
+		embed.add_field(name="Artists", value=book.artists[:-2], inline=False)
+	if book.groups:
+		embed.add_field(name="Groups", value=book.groups[:-2], inline=False)		
+	if book.languages:
+		embed.add_field(name="Languages", value=book.languages[:-2], inline=False)
+
+	return embed
+
+# BOT CLIENT
+
+client = discord.Client()
+
+colors = ['Violet', 'Indigo', 'Blue', 'Green', 'Yellow', 'Orange', 'Red']
+
+colorshex = {
+	'Violet': 9699539,
+	'Indigo': 4915330,
+	'Blue': 255,
+	'Green': 65280,
+	'Yellow': 16776960,
+	'Orange': 16744192,
+	'Red': 16711680
+}
+
+my_activity = discord.Activity(name="vers l'horizon", type=3, large_image_url="https://cdn4.iconfinder.com/data/icons/black-cat-pattern/94/cat2-512.png")
+
+@tasks.loop(hours=6.0)
+async def change_role():
+	colorday = random.choice(colors)
+	colorint = discord.Color(colorshex[colorday])
+	await client.get_guild(240567272605876224).get_role(307297743376875520).edit(name='Cute ' + colorday, colour=colorint)
+
+@client.event
+async def on_ready():
+	print('Logged in as {0.user}'.format(client))
+	await client.change_presence(activity=my_activity)
+	change_role.start()
+
+@client.event
+async def on_message(message):
+	if message.author == client.user:
+		return
+
+	if message.mention_everyone:
+		emojie = discord.utils.get(client.emojis, name="angerypingcircle")
+		await message.add_reaction(emojie)
+
+	if message.content.startswith('$hello'):
+		await message.channel.send('Hello!')
+
+	if message.content.startswith('$test'):
+		await message.channel.send('Hello {.author}!'.format(message))
+
+	if message.content.startswith('$help'):
+		await message.channel.send("""
+__**Aide pour ProxiLEWD**__
+```
+La seule principale fonction pour l'instant est de connaitre une sauce à l'aide de son numéro, comme ceci :
+		(sauce)
+La sauce sera affichée dans nsfw-shitpost.
+Vous pouvez aussi lui envoyer un message privé si vous ne souhaitez pas partager vos fétiches avec les autres membres du serveur.
+
+Vous pouvez également lui dire $hello et il vous répondra.
+
+Les commandes dans le futur auront pour préfixe $```""")
+
+	if message.content.startswith('n. '):
+
+		# print(message.content)
+		if '<' in message.content:
+			result = re.search(r':(.*):', message.content)
+
+			img_url = str(discord.utils.get(client.emojis, name=result.group(1)).url)
+			async with aiohttp.ClientSession() as cs:
+				async with cs.get(img_url) as r:
+					if r.status != 200:
+						return await message.channel.send('No.')
+					data = io.BytesIO(await r.read())
+					await message.channel.send(file=discord.File(data, 'blbl.png'))
+			await message.delete()
+		else:
+			# print(client.emojis)
+			# print('\\'+message.content[3:])
+			# img_url = str(discord.utils.get(client.emojis, message.content[3:]).url)
+			# await message.channel.send(img_url)
+			pass
+	
+	if message.content.startswith('(') and message.content.endswith(')') and message.content[1:-1].isdigit():
+
+		print(message)
+		print(message.guild)
+
+		if (message.guild == None):
+			# DM 
+			nsfw_shitpost = message.channel
+		elif (message.guild == client.get_guild(588460743083687998)):
+			# Bot Test
+			nsfw_shitpost = message.guild.get_channel(603314634442932307)
+		else:
+			# Chaton
+			nsfw_shitpost = message.guild.get_channel(568885536404668436)
+
+		print(nsfw_shitpost)
+
+		try:
+			book_nb = int(message.content[1:-1])
+			if isinstance(book_nb, int):
+				emoji = discord.utils.get(client.emojis, name="loli_hype")
+				await nsfw_shitpost.send(embed=get_book(book_nb, emoji))
+		except Exception as e:
+			with open("resources/error.png", 'rb') as fp:
+				await message.channel.send("Une erreur est survenue lors de la recherche de ce livre.", file=discord.File(fp, filename="error400.png"))
+
+				if message.guild:
+					cd = client.get_guild(588460743083687998).get_channel(603314634442932307)
+					await cd.send("```" + str(e) + "```")
+				else:
+					mydm = client.get_user(112925579812069376).dm_channel
+					print(e)
+					await mydm.send("```" + str(e) + "```")
+
+client.run(auth['token'])
