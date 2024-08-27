@@ -29,18 +29,32 @@ class Doujinshi():
 			self.init_from_div(arg)
 
 	def init_from_div(self, res):
-		self.name = res.div.text
-		self.magic = int(res.a['href'][3:-1:])
-		self._set_cover(res)
+		if res.div and res.a:
+			self.name = res.div.text
+			self.magic = int(res.a['href'][3:-1:])
+			self._set_cover(res)
+		else:
+			raise ValueError("Invalid div structure")
 			
 	def init_from_id(self, magic):
 		res = _get(DOUJIN_URL.format(magic))
-		if res(class_='container error'):
+		if res.find(class_='container error'):
 			raise errors.DoujinshiNotFound()
+
 		self.magic = magic
-		self._set_cover(res.find(id='cover'))
-		self.fetch(res) # since res was already requested
-		self.name = res.find(id='info').h1.text
+		cover_res = res.find(id='cover')
+		if cover_res:
+			self._set_cover(cover_res)
+		else:
+			raise ValueError("Cover not found")
+
+		info_res = res.find(id='info')
+		if info_res and info_res.h1:
+			self.name = info_res.h1.text
+		else:
+			raise ValueError("Info or title not found")
+
+		self.fetch(res)  # since res was already requested
 		
 	def _set_cover(self, res):
 		try:
@@ -53,43 +67,50 @@ class Doujinshi():
 		if not res:
 			res = _get(DOUJIN_URL.format(self.magic))
 		# add pages
-		for url in res(class_='gallerythumb'):
-			url = url.noscript.img['src'].rsplit('/', 1)[-1]
-			self._images.append(IMAGE_URL.format(self.gid, url.replace('t', '')))
+		for thumb in res.find_all(class_='gallerythumb'):
+			img = thumb.find('noscript').img if thumb.find('noscript') else None
+			if img:
+				url = img['src'].rsplit('/', 1)[-1]
+				self._images.append(IMAGE_URL.format(self.gid, url.replace('t', '')))
+			else:
+				print("Image not found for a gallerythumb")
 		# set info (jname, pages, tags)
-		res = res.find(id='info')
-		self.jname = res.h2.text if res.h2 else None
-		self.pages = len(self._images)
+		info_res = res.find(id='info')
+		if info_res:
+			self.jname = info_res.h2.text if info_res.h2 else None
+			self.pages = len(self._images)
 
-		self.parodies = ""
-		self.characters = ""
-		self.tags = ""
-		self.artists = ""
-		self.groups = ""
-		self.languages = ""
+			self.parodies = ""
+			self.characters = ""
+			self.tags = ""
+			self.artists = ""
+			self.groups = ""
+			self.languages = ""
 
-		self.yes = "no"
+			self.yes = "no"
 
-		for sub_tag in res('div', class_='tag-container'):
-		# for tag in res('a', class_='tag'):
-			for a in sub_tag('a', class_='tag'):
-				for span in a('span', class_='name'):
-					if "Parodies" in sub_tag.text:
-						self.parodies += '[' + span.text + ']' + "(https://nhentai.net/parody/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
-					if "Characters" in sub_tag.text:
-						self.characters += '[' + span.text + ']' + "(https://nhentai.net/character/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
-					if "Tags" in sub_tag.text:
-						if "lolicon" in a.text:
-							self.yes = "YES"
-						self.tags += span.text + ', '
-					if "Artists" in sub_tag.text:
-						self.artists += '[' + span.text + ']' + "(https://nhentai.net/artist/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
-					if "Groups" in sub_tag.text:
-						self.groups += '[' + span.text + ']' + "(https://nhentai.net/group/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
-					if "Languages" in sub_tag.text:
-						self.languages += span.text + ', '
+			for sub_tag in res('div', class_='tag-container'):
+			# for tag in res('a', class_='tag'):
+				for a in sub_tag('a', class_='tag'):
+					for span in a('span', class_='name'):
+						if "Parodies" in sub_tag.text:
+							self.parodies += '[' + span.text + ']' + "(https://nhentai.net/parody/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
+						if "Characters" in sub_tag.text:
+							self.characters += '[' + span.text + ']' + "(https://nhentai.net/character/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
+						if "Tags" in sub_tag.text:
+							if "lolicon" in a.text:
+								self.yes = "YES"
+							self.tags += span.text + ', '
+						if "Artists" in sub_tag.text:
+							self.artists += '[' + span.text + ']' + "(https://nhentai.net/artist/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
+						if "Groups" in sub_tag.text:
+							self.groups += '[' + span.text + ']' + "(https://nhentai.net/group/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
+						if "Languages" in sub_tag.text:
+							self.languages += span.text + ', '
 
-		self.fetched = True
+			self.fetched = True
+		else:
+			raise ValueError("Info section not found")
 		
 	def __getitem__(self, key):
 		if not self.fetched:
@@ -97,16 +118,20 @@ class Doujinshi():
 		return self._images[key]
 		
 	def __getattr__(self, key):
-		if key == 'jname' or key == 'pages' or key == 'tags':
+		if key in {'jname', 'pages', 'tags'}:
 			self.fetch()
-			return getattr(self, key)
-		raise AttributeError
+			if hasattr(self, key):
+				return getattr(self, key)
+		raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{key}'")
 		
 	def __repr__(self):
 		return 'doujin:' + str(self.magic)
 		
-def _get(endpoint:str):
-	return _soup(session.get(endpoint).text, 'lxml')
+def _get(endpoint: str):
+    response = session.get(endpoint)
+    if response.status_code != 200:
+        raise ValueError(f"Failed to retrieve content from {endpoint}")
+    return _soup(response.text, 'lxml')
 	
 def search(query:str, page:int=1):
 	res = _get(SEARCH_URL.format(quote(query), page))
