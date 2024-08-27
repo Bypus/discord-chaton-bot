@@ -1,1 +1,1 @@
-# discord-nhentai-bot
+# discord-nh-bot
