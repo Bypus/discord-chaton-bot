@@ -24,7 +24,7 @@ def get_wishlist_game(steam_id):
     return random.choice(array_of_key_value_pairs)
 
 def get_steam_game(game):
-    return steam.apps.get_app_details(int(game))
+    return steam.apps.get_app_details(int(game), "FR")
 
 def find_in_dict(d, search_key):
     if isinstance(d, dict):
@@ -54,7 +54,16 @@ def get_embed(game):
     else:
         ownwish["icon"] = ""
         ownwish["name"] = "ACHETE"
-        embed.colour = 0xE69C40
+        print(game)
+        if 'reviews_percent' in game:
+            if game['reviews_percent'] > 80:
+                embed.colour = 0x00CE7A
+            elif game['reviews_percent'] > 50:
+                embed.colour = 0xFFBD3F
+            else:
+                embed.colour = 0xFF6874
+        else:
+            embed.colour = 0x9C5B4B
     embed.set_author(name=ownwish["name"],
                     icon_url=ownwish["icon"])
 
