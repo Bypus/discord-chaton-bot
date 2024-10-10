@@ -1,4 +1,6 @@
+from calendar import c
 import os
+import time
 import datetime
 import locale
 import random
@@ -9,6 +11,7 @@ locale.setlocale(locale.LC_ALL, '')
 
 KEY = os.environ.get("STEAM_API_KEY")
 steam = Steam(KEY)
+current_datetime = int(datetime.datetime.now().timestamp())
 
 def get_random_game(steam_id):
     games = steam.users.get_owned_games(steam_id)
@@ -16,7 +19,7 @@ def get_random_game(steam_id):
 
 def get_wishlist_game(steam_id):
     wishlist = steam.users.get_profile_wishlist(steam_id)
-    array_of_key_value_pairs = [{"appid": key, **value} for key, value in wishlist.items()]
+    array_of_key_value_pairs = [{"appid": key, **value} for key, value in wishlist.items() if int(value.get('release_date', 0)) < current_datetime]
 
     return random.choice(array_of_key_value_pairs)
 
@@ -38,6 +41,7 @@ def get_embed(game):
     ownwish = {}
     appid = game['appid']
     gameEmbed = get_steam_game(appid)
+    print(game)
     
     embed = discord.Embed(title=find_in_dict(game, "name"),
                       url="https://store.steampowered.com/app/" + str(appid),
@@ -71,6 +75,7 @@ def get_embed(game):
                             value=str(human_readable_time),
                             inline=True)
     else:
+        
         embed.add_field(name="Prix",
                         value=str(float(game['subs'][0]['price']) / 100.00) + "€",
                         inline=True)
