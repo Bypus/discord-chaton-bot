@@ -50,9 +50,11 @@ def get_embed(game):
     if 'img_icon_url' in game:
         ownwish["icon"] = "http://media.steampowered.com/steamcommunity/public/images/apps/" + str(appid) + "/" + game['img_icon_url'] + ".jpg"
         ownwish["name"] = "JOUE"
+        embed.colour = 0xA2E362
     else:
         ownwish["icon"] = ""
         ownwish["name"] = "ACHETE"
+        embed.colour = 0xE69C40
     embed.set_author(name=ownwish["name"],
                     icon_url=ownwish["icon"])
 
@@ -74,7 +76,6 @@ def get_embed(game):
                             value=str(human_readable_time),
                             inline=True)
     else:
-        
         embed.add_field(name="Prix",
                         value=str(float(game['subs'][0]['price']) / 100.00) + "€",
                         inline=True)
