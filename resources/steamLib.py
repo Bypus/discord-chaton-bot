@@ -41,7 +41,6 @@ def get_embed(game):
     ownwish = {}
     appid = game['appid']
     gameEmbed = get_steam_game(appid)
-    print(game)
     
     embed = discord.Embed(title=find_in_dict(game, "name"),
                       url="https://store.steampowered.com/app/" + str(appid),
