@@ -15,7 +15,7 @@ current_datetime = int(datetime.datetime.now().timestamp())
 
 def get_random_game(steam_id):
     games = steam.users.get_owned_games(steam_id)
-    return random.choice(list(games['games']))
+    return random.choice(list(games['games'])) if 'games' in games else None
 
 def get_wishlist_game(steam_id):
     wishlist = steam.users.get_profile_wishlist(steam_id)
@@ -54,7 +54,7 @@ def get_embed(game):
     else:
         ownwish["icon"] = ""
         ownwish["name"] = "ACHETE"
-        print(game)
+        
         if 'reviews_percent' in game:
             if game['reviews_percent'] > 80:
                 embed.colour = 0x00CE7A
