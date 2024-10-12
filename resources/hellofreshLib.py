@@ -3,7 +3,6 @@ import os
 import unicodedata
 import discord
 import random
-from deep_translator import GoogleTranslator
 import requests
 try:
     from dotenv import load_dotenv
@@ -13,7 +12,7 @@ except:
 
 def search_image(query):
     api_key = os.environ.get("CUSTOM_SEARCH_API")  # Remplacez par votre clé API Google
-    search_engine_id =  os.environ.get("SEARCH_ENGINE_ID")  # Remplacez par votre ID de moteur de recherche personnalisé
+    search_engine_id = os.environ.get("SEARCH_ENGINE_ID")  # Remplacez par votre ID de moteur de recherche personnalisé
     url = f"https://www.googleapis.com/customsearch/v1?q={query}&cx={search_engine_id}&searchType=image&key={api_key}"
     
     response = requests.get(url).json()
