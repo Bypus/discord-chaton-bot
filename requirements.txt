@@ -7,4 +7,4 @@ python-steam-api==2.0.4
 jow-api==0.1.4
 deepl==1.21.0
 httpx==0.28.1
-langdetect==1.0.9
+lingua-language-detector==2.0.2
