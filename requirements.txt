@@ -1,10 +1,10 @@
 discord==2.3.2
-python-dotenv==1.0.0
-requests==2.32.3
-beautifulsoup4==4.12.3
-lxml==5.3.0
+python-dotenv>=1.0.0
+requests>=2.32.3
+beautifulsoup4>=4.12.3
+lxml>=5.3.0
 python-steam-api==2.0.4
 jow-api==0.1.4
 deepl==1.21.0
-httpx==0.28.1
-fast-langdetect==0.2.5
+httpx>=0.28.1
+fast-langdetect>=0.2.5
