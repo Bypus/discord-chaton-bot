@@ -2,9 +2,9 @@
 
 FROM python:3.12
 
-WORKDIR /discord-nhlib-bot
-COPY requirements.txt /discord-nhlib-bot
+WORKDIR /discord-chaton-bot
+COPY requirements.txt /discord-chaton-bot
 RUN pip install -r requirements.txt
-COPY . /discord-nhlib-bot
+COPY . /discord-chaton-bot
 
 CMD python bot.py
