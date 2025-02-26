@@ -87,24 +87,32 @@ class Doujinshi():
 			self.groups = ""
 			self.languages = ""
 
-			self.yes = "no"
+			self.wewo = 0
 
 			for sub_tag in res('div', class_='tag-container'):
 			# for tag in res('a', class_='tag'):
 				for a in sub_tag('a', class_='tag'):
 					for span in a('span', class_='name'):
 						if "Parodies" in sub_tag.text:
-							self.parodies += '[' + span.text + ']' + "(https://nhentai.net/parody/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
+							text_parts = span.text.split(' ')
+							url_part = '-'.join(text_parts[:-1]) if len(text_parts) > 1 else text_parts[0]
+							self.parodies += f'[{span.text}](https://nhentai.net/parody/{url_part}), '
 						if "Characters" in sub_tag.text:
-							self.characters += '[' + span.text + ']' + "(https://nhentai.net/character/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
+							text_parts = span.text.split(' ')
+							url_part = '-'.join(text_parts[:-1]) if len(text_parts) > 1 else text_parts[0]
+							self.characters += f'[{span.text}](https://nhentai.net/character/{url_part}), '
 						if "Tags" in sub_tag.text:
 							if "lolicon" in a.text:
-								self.yes = "YES"
+								self.wewo = 1
 							self.tags += span.text + ', '
 						if "Artists" in sub_tag.text:
-							self.artists += '[' + span.text + ']' + "(https://nhentai.net/artist/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
+							text_parts = span.text.split(' ')
+							url_part = '-'.join(text_parts[:-1]) if len(text_parts) > 1 else text_parts[0]
+							self.artists += f'[{span.text}](https://nhentai.net/artist/{url_part}), '
 						if "Groups" in sub_tag.text:
-							self.groups += '[' + span.text + ']' + "(https://nhentai.net/group/" + '-'.join(span.text.split(' ')[:-1]) + ")" + ', '
+							text_parts = span.text.split(' ')
+							url_part = '-'.join(text_parts[:-1]) if len(text_parts) > 1 else text_parts[0]
+							self.groups += f'[{span.text}](https://nhentai.net/group/{url_part}), '
 						if "Languages" in sub_tag.text:
 							self.languages += span.text + ', '
 
