@@ -12,4 +12,8 @@ Bot Helper for a friends group discord server
 - Veggie option
 - Easy option
 
+🧑‍🍳 Get a random receipe from Jow's catalog
+- Easy option
+
+
 <sub>📙 Get reference from a library with asian styled books specifiying a number</sub>
