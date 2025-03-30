@@ -255,25 +255,26 @@ async def get_tweet_text(username, tweet_id):
             # ✍️ Traduction si nécessaire
             if detected_lang not in ["fr", "en"]:
                 translated = translator.translate_text(tweet_text, target_lang="FR").text
-                tweet_text = f"✍️ **Traduction du {detected_lang.upper()} :**\n{translated}"
+                tweet_text = f"✍️ **Traduction du {detected_lang.upper()} :**\n-# {translated}"
 
         # 🔁 Gestion du quote retweet
-        quote_tweet = soup.find("div", class_="quote")
-        quote_text = None
-        quote_author_text = None
-        quote_date_text = None
-        if quote_tweet:
-            quote_author = quote_tweet.find("a", class_="username")
-            quote_date = quote_tweet.find("span", class_="tweet-date")
-            quote_content = quote_tweet.find("div", class_="quote-text")
+        # quote_tweet = soup.find("div", class_="quote")
+        # print(f"Quote tweet: {quote_tweet}")
+        # quote_text = None
+        # quote_author_text = None
+        # quote_date_text = None
+        # if quote_tweet:
+        #     quote_author = quote_tweet.find("a", class_="username")
+        #     quote_date = quote_tweet.find("span", class_="tweet-date")
+        #     quote_content = quote_tweet.find("div", class_="quote-text")
 
-            if quote_author and quote_content:
-                quote_author_text = quote_author.get_text(strip=True)
-                quote_date_text = quote_date.get_text(strip=True) if quote_date else ""
-                quote_text_raw = quote_content.get_text("\n", strip=True).rstrip("\n")
-                quote_text = format_as_quote(quote_text_raw)
+        #     if quote_author and quote_content:
+        #         quote_author_text = quote_author.get_text(strip=True)
+        #         quote_date_text = quote_date.get_text(strip=True) if quote_date else ""
+        #         quote_text_raw = quote_content.get_text("\n", strip=True).rstrip("\n")
+        #         quote_text = format_as_quote(quote_text_raw)
 
-        return tweet_text, quote_text, quote_author_text, quote_date_text, has_single_image, detected_lang
+        return tweet_text, has_single_image, detected_lang # quote_text, quote_author_text, quote_date_text, 
 
     except httpx.RequestError:
         return None, None, None, None, False, None
@@ -288,33 +289,41 @@ async def on_message(message):
         await message.add_reaction(emojie)
 
     if "https://x.com/" in message.content or "https://twitter.com/" in message.content:
-        # Remplace tous les liens Twitter/X dans le message
-        twitter_url = re.search(r"https?://(?:x|twitter)\.com/([^/]+)/status/(\d+)", message.content)
-        if not twitter_url:
-            return
+        clean_content = re.sub(r"\n+\|\|$", "||", message.content.strip())
+        twitter_match = re.search(r"(\|\|)?(https?://(?:x|twitter)\.com/[^/]+/status/\d+)(\|\|)?", clean_content)
+        is_spoiler = twitter_match and twitter_match.group(1) == "||" and twitter_match.group(3) == "||"
+        twitter_url = twitter_match.group(2)
         
-        username, tweet_id = twitter_url.groups()
-        tweet_text, quote_text, quote_author, quote_date, has_single_image, detected_lang = await get_tweet_text(username, tweet_id)
+        username, tweet_id = twitter_url.split("/")[-3], twitter_url.split("/")[-1]
+        tweet_text, has_single_image, detected_lang = await get_tweet_text(username, tweet_id) # quote_text, quote_author, quote_date, 
+        
 
-        if not quote_text and has_single_image and detected_lang in ["fr", "en"]:
+        # g.fixupx.com
+        # g.fxtwitter.com
+        fixed_link = re.sub(r"https?://(?:x\.com|twitter\.com)", 
+                            lambda m: "https://fixupx.com" if "x.com" in m.group(0) else "https://fxtwitter.com", 
+                            twitter_match.group(2))
+        
+
+        formatted_message = f"🔗 [Fixuped]({fixed_link})\n"
+
+        if has_single_image and detected_lang in ["fr", "en"]:
+            await message.channel.send(formatted_message, reference=message, mention_author=False)
             return
 
         await message.edit(suppress=True)
 
-        fixed_link = re.sub(r"https?://(?:x\.com|twitter\.com)", 
-                            lambda m: "https://g.fixupx.com" if "x.com" in m.group(0) else "https://g.fxtwitter.com", 
-                            twitter_url.group(0))
-
-        formatted_message = f"🔗 [Fixuped]({fixed_link})"
-
         # embed_one = discord.Embed(title=f"🔁 Quote Retweet de **{quote_author}** ({quote_date}) :", description=f"{quote_text}", color=discord.Colour.blue())
         # embed_two = discord.Embed(title=f"📢 **Tweet de @{username}**", description=f"{tweet_text}", color=discord.Colour.blue())
 
-        if quote_text:
-            formatted_message += f"\n🔁 Quote Retweet de **{quote_author}** ({quote_date}) :\n*{quote_text}*"
+        # if quote_text:
+        #     formatted_message += f"🔁 Quote Retweet de **{quote_author}** ({quote_date}) :\n*{quote_text}*"
 
-        formatted_message += f"\n📢 **Tweet de @{username}**\n{format_as_quote(tweet_text)}" if tweet_text else ""
+        if detected_lang not in ["fr", "en"]:
+            formatted_message += f":flag_{detected_lang} **Traduction :**\n{format_as_quote(tweet_text)}" if tweet_text else ""
 
+        if is_spoiler:
+            formatted_message = f"||{formatted_message}||"
 
         # await message.channel.send(content=formatted_message, embeds=[embed_one, embed_two], reference=message, mention_author=False)
         await message.channel.send(formatted_message, reference=message, mention_author=False)
