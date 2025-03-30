@@ -250,12 +250,12 @@ async def get_tweet_text(username, tweet_id):
         detected_lang = None
         if tweet_text.strip():
             detected_lang = detect_language(tweet_text)
-            # print(f"Detected {detected_lang} : {tweet_text}")
             
             # ✍️ Traduction si nécessaire
             if detected_lang not in ["fr", "en"]:
                 translated = translator.translate_text(tweet_text, target_lang="FR").text
-                tweet_text = f"✍️ **Traduction du {detected_lang.upper()} :**\n-# {translated}"
+                lang_flag = "jp" if detected_lang == "ja" else detected_lang
+                tweet_text = f":flag_{lang_flag}: -> :flag_fr:**\n-# {translated}"
 
         # 🔁 Gestion du quote retweet
         # quote_tweet = soup.find("div", class_="quote")
@@ -320,7 +320,7 @@ async def on_message(message):
         #     formatted_message += f"🔁 Quote Retweet de **{quote_author}** ({quote_date}) :\n*{quote_text}*"
 
         if detected_lang not in ["fr", "en"]:
-            formatted_message += f":flag_{detected_lang} **Traduction :**\n{format_as_quote(tweet_text)}" if tweet_text else ""
+            formatted_message += f"\n{format_as_quote(tweet_text)}" if tweet_text else ""
 
         if is_spoiler:
             formatted_message = f"||{formatted_message}||"
