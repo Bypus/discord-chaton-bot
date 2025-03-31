@@ -223,11 +223,14 @@ async def get_tweet_text(username, tweet_id):
 
         # 📝 Récupération du tweet principal
         tweet_content = soup.find("div", class_="tweet-content")
-        # for link in tweet_content.find_all("a") if tweet_content else []:
-        #     href = link.get("href", "")
-        #     text = link.get_text(strip=True)
-        #     if "…" in text and href:
-        #         link.string = href  # Remplace le texte par l'URL complète
+        for link in tweet_content.find_all("a"):
+            href = link.get("href", "")
+            text = link.get_text(strip=True)
+
+            # Vérifie si le texte du lien est tronqué
+            if ("." in text or "…" in text) and href:
+                link.replace_with(f"[{text}]({href})")
+
         tweet_text = tweet_content.get_text("\n", strip=True) if tweet_content else ""
 
         # 🔗 Correction des liens raccourcis
@@ -255,8 +258,8 @@ async def get_tweet_text(username, tweet_id):
             if detected_lang not in ["fr", "en"]:
                 translated = translator.translate_text(tweet_text, target_lang="FR").text
                 lang_flag = "jp" if detected_lang == "ja" else detected_lang
-                translated = re.sub(r"(?<=\S)\n", "\n-# ", translated)  # Ajoute "-# " seulement si la ligne précédente n'est pas vide
-                translated = "-# " + translated  # Ajoute "-# " à la première ligne
+                translated = "\n".join(f"-# {line}" if line.strip() else "" for line in translated.split("\n"))
+
                 tweet_text = f":flag_{lang_flag}: -> :flag_fr:\n{translated}"
 
         # 🔁 Gestion du quote retweet
