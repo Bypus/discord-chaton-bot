@@ -307,11 +307,11 @@ async def on_message(message):
 
         formatted_message = f"🔗 [Fixuped]({fixed_link})\n"
 
+        await message.edit(suppress=True)
+
         if has_single_image and detected_lang in ["fr", "en"]:
             await message.channel.send(formatted_message, reference=message, mention_author=False)
             return
-
-        await message.edit(suppress=True)
 
         # embed_one = discord.Embed(title=f"🔁 Quote Retweet de **{quote_author}** ({quote_date}) :", description=f"{quote_text}", color=discord.Colour.blue())
         # embed_two = discord.Embed(title=f"📢 **Tweet de @{username}**", description=f"{tweet_text}", color=discord.Colour.blue())
