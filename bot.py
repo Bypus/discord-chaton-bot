@@ -223,13 +223,13 @@ async def get_tweet_text(username, tweet_id):
 
         # 📝 Récupération du tweet principal
         tweet_content = soup.find("div", class_="tweet-content")
-        for link in tweet_content.find_all("a"):
-            href = link.get("href", "")
-            text = link.get_text(strip=True)
+        # for link in tweet_content.find_all("a"):
+        #     href = link.get("href", "")
+        #     text = link.get_text(strip=True)
 
-            # Vérifie si le texte du lien est tronqué
-            if ("." in text or "…" in text) and href:
-                link.replace_with(f"[{text}]({href})")
+        #     # Vérifie si le texte du lien est tronqué
+        #     if ("." in text or "…" in text) and href:
+        #         link.replace_with(f"[{text}]({href})")
 
         tweet_text = tweet_content.get_text("\n", strip=True) if tweet_content else ""
 
