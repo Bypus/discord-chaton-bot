@@ -255,7 +255,8 @@ async def get_tweet_text(username, tweet_id):
             if detected_lang not in ["fr", "en"]:
                 translated = translator.translate_text(tweet_text, target_lang="FR").text
                 lang_flag = "jp" if detected_lang == "ja" else detected_lang
-                tweet_text = f":flag_{lang_flag}: -> :flag_fr:\n-# {translated}"
+                translated = "-# " + translated.replace("\n", "\n-# ")
+                tweet_text = f":flag_{lang_flag}: -> :flag_fr:\n{translated}"
 
         # 🔁 Gestion du quote retweet
         # quote_tweet = soup.find("div", class_="quote")
