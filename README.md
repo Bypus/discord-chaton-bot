@@ -16,4 +16,4 @@ Bot Helper for a friends group discord server
 - Easy option
 
 
-<sub>📙 Get reference from a library with asian styled books specifiying a number</sub>
+<sub>📙 Scrap information from an online library</sub>
