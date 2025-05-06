@@ -348,6 +348,11 @@ async def on_message(message):
         modified_content = message.content.replace("tiktok.com", "vxtiktok.com")
         await message.channel.send(f"🔄 [EmbedEZ]({modified_content})", reference=message, mention_author=False)
 
+    if "bilibili.com" in message.content:
+        await message.edit(suppress=True)
+        modified_content = message.content.replace("bilibili.com", "vxbilibili.com")
+        await message.channel.send(f"🔄 [BiliFix]({modified_content})", reference=message, mention_author=False)
+
     # if "www.youtube.com" in message.content:
     #     await message.edit(suppress=True)
     #     modified_content = message.content.replace("www.youtube.com", "yt.cdn.13373333.one")
