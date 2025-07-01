@@ -335,18 +335,24 @@ async def on_message(message):
 
     if "www.reddit.com" in message.content:
         await message.edit(suppress=True)
-        modified_content = message.content.replace("reddit.com", "rxddit.com")
-        await message.channel.send(f"🔄 [rxddit]({modified_content})", reference=message, mention_author=False)
+        urls = re.findall(r"(https?://(?:www\.)?reddit\.com\S+)", message.content)
+        for url in urls:
+            fixed_url = url.replace("reddit.com", "rxddit.com")
+            await message.channel.send(fixed_url, reference=message, mention_author=False)
 
     if "instagram.com" in message.content:
         await message.edit(suppress=True)
-        modified_content = message.content.replace("instagram.com", "instagramez.com")
-        await message.channel.send(f"🔄 [EmbedEZ]({modified_content})", reference=message, mention_author=False)
+        urls = re.findall(r"(https?://(?:www\.)?instagram\.com\S+)", message.content)
+        for url in urls:
+            fixed_url = url.replace("instagram.com", "instagramez.com")
+            await message.channel.send(fixed_url, reference=message, mention_author=False)
 
     if "tiktok.com" in message.content:
         await message.edit(suppress=True)
-        modified_content = message.content.replace("tiktok.com", "vxtiktok.com")
-        await message.channel.send(f"🔄 [EmbedEZ]({modified_content})", reference=message, mention_author=False)
+        urls = re.findall(r"(https?://(?:www\.)?tiktok\.com\S+)", message.content)
+        for url in urls:
+            fixed_url = url.replace("tiktok.com", "vxtiktok.com")
+            await message.channel.send(fixed_url, reference=message, mention_author=False)
 
     # if "bilibili.com" in message.content: 
     #     await message.edit(suppress=True)
