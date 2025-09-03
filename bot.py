@@ -333,33 +333,28 @@ async def on_message(message):
         # await message.channel.send(content=formatted_message, embeds=[embed_one, embed_two], reference=message, mention_author=False)
         await message.channel.send(formatted_message, reference=message, mention_author=False)
 
-    if "www.reddit.com" in message.content:
+    if any(domain in message.content for domain in ["reddit.com", "instagram.com", "tiktok.com"]):
         await message.edit(suppress=True)
 
-        # Capture le lien, avec ou sans || autour
-        urls = re.findall(r"(\|\|)?(https?://(?:www\.)?reddit\.com\S+)(\|\|)?", message.content)
+        replacements = {
+            "reddit.com": "rxddit.com",
+            "instagram.com": "instagramez.com",
+            "tiktok.com": "vxtiktok.com",
+        }
 
-        for prefix, url, suffix in urls:
-            fixed_url = url.replace("reddit.com", "rxddit.com")
+        fixed_urls = []
 
-            # Réapplique les || si elles étaient présentes
-            spoilered_url = f"{prefix or ''}{fixed_url}{suffix or ''}"
+        for domain, replacement in replacements.items():
+            # Regex qui capture avec ou sans || (spoiler)
+            urls = re.findall(rf"(\|\|)?(https?://(?:www\.)?{re.escape(domain)}\S+)(\|\|)?", message.content)
 
-            await message.channel.send(spoilered_url, reference=message, mention_author=False)
+            for prefix, url, suffix in urls:
+                fixed_url = url.replace(domain, replacement)
+                spoilered_url = f"{prefix or ''}{fixed_url}{suffix or ''}"
+                fixed_urls.append(spoilered_url)
 
-    if "instagram.com" in message.content:
-        await message.edit(suppress=True)
-        urls = re.findall(r"(https?://(?:www\.)?instagram\.com\S+)", message.content)
-        for url in urls:
-            fixed_url = url.replace("instagram.com", "instagramez.com")
-            await message.channel.send(fixed_url, reference=message, mention_author=False)
-
-    if "tiktok.com" in message.content:
-        await message.edit(suppress=True)
-        urls = re.findall(r"(https?://(?:www\.)?tiktok\.com\S+)", message.content)
-        for url in urls:
-            fixed_url = url.replace("tiktok.com", "vxtiktok.com")
-            await message.channel.send(fixed_url, reference=message, mention_author=False)
+        if fixed_urls:
+            await message.channel.send("\n".join(fixed_urls), reference=message, mention_author=False)
 
     # if "bilibili.com" in message.content: 
     #     await message.edit(suppress=True)
