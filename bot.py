@@ -335,10 +335,17 @@ async def on_message(message):
 
     if "www.reddit.com" in message.content:
         await message.edit(suppress=True)
-        urls = re.findall(r"(https?://(?:www\.)?reddit\.com\S+)", message.content)
-        for url in urls:
+
+        # Capture le lien, avec ou sans || autour
+        urls = re.findall(r"(\|\|)?(https?://(?:www\.)?reddit\.com\S+)(\|\|)?", message.content)
+
+        for prefix, url, suffix in urls:
             fixed_url = url.replace("reddit.com", "rxddit.com")
-            await message.channel.send(fixed_url, reference=message, mention_author=False)
+
+            # Réapplique les || si elles étaient présentes
+            spoilered_url = f"{prefix or ''}{fixed_url}{suffix or ''}"
+
+            await message.channel.send(spoilered_url, reference=message, mention_author=False)
 
     if "instagram.com" in message.content:
         await message.edit(suppress=True)
