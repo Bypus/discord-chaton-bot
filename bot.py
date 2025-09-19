@@ -49,6 +49,17 @@ colorshex = {
     'Red': 16711680
 }
 
+# Mapping ISO-639-1 -> Emoji flag ISO-3166
+LANG_TO_FLAG = {
+    "fr": "fr",  # français
+    "en": "gb",  # anglais → drapeau UK (Discord n'a pas :flag_en:)
+    "ja": "jp",  # japonais
+    "ko": "kr",  # coréen
+    "zh": "cn",  # chinois simplifié
+    "de": "de",  # allemand
+    "es": "es",  # espagnol
+}
+
 my_activity = discord.Activity(name="comme il fait beau, dehors", type=discord.ActivityType.watching)
 
 def get_book(sauce, emoji):
@@ -257,7 +268,8 @@ async def get_tweet_text(username, tweet_id):
             # ✍️ Traduction si nécessaire
             if detected_lang not in ["fr", "en"]:
                 translated = translator.translate_text(tweet_text, target_lang="FR").text
-                lang_flag = "jp" if detected_lang == "ja" else detected_lang
+                lang_flag = LANG_TO_FLAG.get(detected_lang, "white_flag")  # fallback si non trouvé
+
                 translated = "\n".join(f"-# {line}" if line.strip() else "" for line in translated.split("\n"))
 
                 tweet_text = f":flag_{lang_flag}: -> :flag_fr:\n{translated}"
