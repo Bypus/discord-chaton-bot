@@ -315,7 +315,7 @@ async def on_message(message):
         await message.edit(suppress=True)
 
         if has_single_image and detected_lang in ["fr", "en"]:
-            await message.channel.send(formatted_message, reference=message, mention_author=False)
+            await message.channel.send(formatted_message, reference=message, mention_author=False, silent=True)
             return
 
         # embed_one = discord.Embed(title=f"🔁 Quote Retweet de **{quote_author}** ({quote_date}) :", description=f"{quote_text}", color=discord.Colour.blue())
@@ -331,7 +331,7 @@ async def on_message(message):
             formatted_message = f"||{formatted_message}||"
 
         # await message.channel.send(content=formatted_message, embeds=[embed_one, embed_two], reference=message, mention_author=False)
-        await message.channel.send(formatted_message, reference=message, mention_author=False)
+        await message.channel.send(formatted_message, reference=message, mention_author=False, silent=True)
 
     if any(domain in message.content for domain in ["reddit.com", "instagram.com", "tiktok.com"]):
         await message.edit(suppress=True)
@@ -354,7 +354,7 @@ async def on_message(message):
                 fixed_urls.append(spoilered_url)
 
         if fixed_urls:
-            await message.channel.send("\n".join(fixed_urls), reference=message, mention_author=False)
+            await message.channel.send("\n".join(fixed_urls), reference=message, mention_author=False, silent=True)
 
     # if "bilibili.com" in message.content: 
     #     await message.edit(suppress=True)
