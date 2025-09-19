@@ -206,9 +206,13 @@ def detect_language(text):
     """Uses fast_langdetect to detect the language of a given text."""
     try:
         cleaned_text = text.replace("\n", " ")
-        return detect(cleaned_text)['lang']  # Retourne directement le code langue
+        result = detect(cleaned_text)
+        if result and isinstance(result, list):
+            return result[0]['lang']  # Prend la première détection
+        return None
     except Exception as e:
-        return str(e)
+        # Language detection failed
+        return None
 
 def format_as_quote(text):
     """Ajoute '>' devant chaque ligne pour le formatage en citation Discord."""
@@ -264,11 +268,11 @@ async def get_tweet_text(username, tweet_id):
         detected_lang = None
         if tweet_text.strip():
             detected_lang = detect_language(tweet_text)
-            
+
             # ✍️ Traduction si nécessaire
-            if detected_lang not in ["fr", "en"]:
+            if detected_lang and detected_lang not in ["fr", "en"]:
                 translated = translator.translate_text(tweet_text, target_lang="FR").text
-                lang_flag = LANG_TO_FLAG.get(detected_lang, "white_flag")  # fallback si non trouvé
+                lang_flag = LANG_TO_FLAG.get(detected_lang)  # fallback si non trouvé
 
                 translated = "\n".join(f"-# {line}" if line.strip() else "" for line in translated.split("\n"))
 
