@@ -401,7 +401,7 @@ async def on_message(message):
                 if r.status != 200:
                     return await message.channel.send('No.')
                 data = io.BytesIO(await r.read())
-                await message.channel.send(file=discord.File(data, 'slurp.png'))
+                await message.channel.send(file=discord.File(data, 'slurp.png'), silent=True)
 
         # global cringe_joke
         # if cringe_joke == 0:
