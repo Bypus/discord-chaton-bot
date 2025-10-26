@@ -311,14 +311,23 @@ async def on_message(message):
 
     if "https://x.com/" in message.content or "https://twitter.com/" in message.content:
         clean_content = re.sub(r"\n+\|\|$", "||", message.content.strip())
-        twitter_match = re.search(r"(\|\|)?(https?://(?:x|twitter)\.com/[^/]+/status/\d+)(\|\|)?", clean_content)
-        is_spoiler = twitter_match and twitter_match.group(1) == "||" and twitter_match.group(3) == "||"
-        twitter_url = twitter_match.group(2)
+
+        twitter_match = re.search(
+            r"(\|\|\s*)?(https?://(?:x|twitter)\.com/[^/\s]+/status/\d+)(\s*\|\|)?",
+            clean_content,
+            re.MULTILINE
+        )
+
+        is_spoiler = (
+            twitter_match
+            and twitter_match.group(1) is not None
+            and twitter_match.group(3) is not None
+        )
+        twitter_url = twitter_match.group(2) if twitter_match else None
         
         username, tweet_id = twitter_url.split("/")[-3], twitter_url.split("/")[-1]
         tweet_text, has_single_image, detected_lang = await get_tweet_text(username, tweet_id) # quote_text, quote_author, quote_date, 
         
-
         # g.fixupx.com
         # g.fxtwitter.com
         fixed_link = re.sub(r"https?://(?:x\.com|twitter\.com)", 
