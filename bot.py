@@ -232,23 +232,14 @@ async def get_tweet_text(username, tweet_id):
             response = await client.get(url)
 
         if response.status_code != 200 or not response.text.strip():
-            return None, None, None, None, False, None
-
+            return None, None, None
+        
         soup = BeautifulSoup(response.text, "html.parser")
 
         # 📝 Récupération du tweet principal
         tweet_content = soup.find("div", class_="tweet-content")
-        # for link in tweet_content.find_all("a"):
-        #     href = link.get("href", "")
-        #     text = link.get_text(strip=True)
-
-        #     # Vérifie si le texte du lien est tronqué
-        #     if ("." in text or "…" in text) and href:
-        #         link.replace_with(f"[{text}]({href})")
 
         tweet_text = tweet_content.get_text("\n", strip=True) if tweet_content else ""
-
-        # 🔗 Correction des liens raccourcis
 
         # 📸 Détection des images attachées
         attachments = soup.find("div", class_="attachments")
@@ -278,27 +269,11 @@ async def get_tweet_text(username, tweet_id):
 
                 tweet_text = f":flag_{lang_flag}: -> :flag_fr:\n{translated}"
 
-        # 🔁 Gestion du quote retweet
-        # quote_tweet = soup.find("div", class_="quote")
-        # print(f"Quote tweet: {quote_tweet}")
-        # quote_text = None
-        # quote_author_text = None
-        # quote_date_text = None
-        # if quote_tweet:
-        #     quote_author = quote_tweet.find("a", class_="username")
-        #     quote_date = quote_tweet.find("span", class_="tweet-date")
-        #     quote_content = quote_tweet.find("div", class_="quote-text")
-
-        #     if quote_author and quote_content:
-        #         quote_author_text = quote_author.get_text(strip=True)
-        #         quote_date_text = quote_date.get_text(strip=True) if quote_date else ""
-        #         quote_text_raw = quote_content.get_text("\n", strip=True).rstrip("\n")
-        #         quote_text = format_as_quote(quote_text_raw)
-
         return tweet_text, has_single_image, detected_lang # quote_text, quote_author_text, quote_date_text, 
 
     except httpx.RequestError:
-        return None, None, None, None, False, None
+        print("HTTP Request Error while fetching tweet.")
+        return None, None, None
 
 @bot.listen()
 async def on_message(message):
@@ -343,13 +318,7 @@ async def on_message(message):
             await message.channel.send(formatted_message, reference=message, mention_author=False, silent=True)
             return
 
-        # embed_one = discord.Embed(title=f"🔁 Quote Retweet de **{quote_author}** ({quote_date}) :", description=f"{quote_text}", color=discord.Colour.blue())
-        # embed_two = discord.Embed(title=f"📢 **Tweet de @{username}**", description=f"{tweet_text}", color=discord.Colour.blue())
-
-        # if quote_text:
-        #     formatted_message += f"🔁 Quote Retweet de **{quote_author}** ({quote_date}) :\n*{quote_text}*"
-
-        if detected_lang not in ["fr", "en"]:
+        if detected_lang not in ["fr", "en", None]:
             formatted_message += f"{format_as_quote(tweet_text)}" if tweet_text else ""
 
         if is_spoiler:
