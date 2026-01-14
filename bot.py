@@ -332,8 +332,8 @@ async def on_message(message):
 
         replacements = {
             "reddit.com": "rxddit.com",
-            "instagram.com": "instagramez.com",
-            "tiktok.com": "vxtiktok.com",
+            "instagram.com": "uuinstagram.com",
+            "tiktok.com": "tnktok.com",
         }
 
         fixed_urls = []
