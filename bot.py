@@ -332,7 +332,7 @@ async def on_message(message):
 
         replacements = {
             "reddit.com": "rxddit.com",
-            "instagram.com": "uuinstagram.com",
+            "instagram.com": "vxinstagram.com",
             "tiktok.com": "tnktok.com",
         }
 
