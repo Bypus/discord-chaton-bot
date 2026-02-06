@@ -15,7 +15,7 @@ import os
 import re
 import io
 import aiohttp
-from resources import jowLib, hellofreshLib, doujinlib, steamLib
+from resources import jowLib, hellofreshLib, steamLib
 import random
 try:
     from dotenv import load_dotenv
@@ -65,31 +65,7 @@ my_activity = discord.Activity(name="comme il fait beau, dehors", type=discord.A
 steam_id_fb = os.environ.get("STEAM_ID_FB", "")
 guild_test_id = int(os.environ.get("GUILD_TEST_ID", ""))
 
-def get_book(sauce, emoji):
-    book = doujinlib.Doujinshi(sauce)
-    
-    embed = discord.Embed(title=book.name, url="https://nhentai.net/g/" + str(sauce), color=0x80BA25)
-    embed.set_author(name=str(sauce))
-    embed.set_thumbnail(url=str(book.cover))
 
-    if book.parodies:
-        embed.add_field(name="Parodies", value=book.parodies[:-2], inline=False)
-    if book.characters:
-        embed.add_field(name="Characters", value=book.characters[:-2], inline=False)
-    if book.wewo == 1:
-        embed.add_field(name="Tags " + str(emoji), value=book.tags[:-2], inline=False)
-    else:
-        embed.add_field(name="Tags", value=book.tags[:-2], inline=False)
-    if book.artists:
-        embed.add_field(name="Artists", value=book.artists[:-2], inline=False)
-    if book.groups:
-        embed.add_field(name="Groups", value=book.groups[:-2], inline=False)
-    if book.languages:
-        embed.add_field(name="Languages", value=book.languages[:-2], inline=False)
-
-    embed.set_footer(text="Les liens peuvent nécessiter un VPN")
-
-    return embed
 
 # @tasks.loop(hours=24.0)
 # async def change_role():
@@ -183,43 +159,7 @@ async def jaitresfaim(interaction: discord.Interaction, ingredients: str, facile
         embeds = hellofreshLib.get_recipe_embed(ingredients, facile)
         await interaction.response.send_message(embeds=embeds)
 
-@bot.tree.command(name="hbook", description="*NSFW* Montre les informations de la référence passée en argument.")
-@app_commands.describe(reference="Numéro de référence du livre.")
-@app_commands.choices(nsfw=[
-    app_commands.Choice(name="Oui", value=1),
-    app_commands.Choice(name="Non", value=0),
-    ])
-async def hbook(interaction: discord.Interaction, reference: int, nsfw: app_commands.Choice[int]):
-    if nsfw.value == 0:
-        await interaction.response.send_message("Il est sage de reconsidérer ses choix.\n-# Tu as mis le paramètre NSFW sur '**Non**'.", ephemeral=True)
-        return
-    
-    is_dm = interaction.guild is None  # Vérifier si c'est un DM
-    nsfw_shitpost = interaction.channel if is_dm else (
-        interaction.guild.get_channel(603314634442932307) if interaction.guild.id == guild_test_id
-        else interaction.guild.get_channel(568885536404668436)
-    )
-    
-    try:
-        emoji = discord.utils.get(bot.emojis, name="wewo")
-        
-        if is_dm:
-            await interaction.response.send_message(embed=get_book(reference, emoji))
-        else:
-            await nsfw_shitpost.send(embed=get_book(reference, emoji))
-            await interaction.response.send_message(f"Le livre a été envoyé dans {nsfw_shitpost.mention}.", ephemeral=True)
 
-    except Exception as e:
-        with open("resources/error.png", 'rb') as fp:
-            await interaction.response.send_message("Une erreur est survenue lors de la recherche de ce livre.", file=discord.File(fp, filename="error400.png"), ephemeral=True)
-        
-        if interaction.guild:
-            cd = bot.get_guild(guild_test_id).get_channel(603314634442932307)
-            await cd.send(f"```{str(e)}```")
-        else:
-            app_info = await bot.application_info()
-            owner = app_info.owner
-            await owner.send(f"```{str(e)}```")
 
 NITTER_INSTANCE = "https://nitter.net"
 
