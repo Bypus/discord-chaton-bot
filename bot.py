@@ -333,14 +333,27 @@ async def on_message(message):
                 await message.channel.send(file=discord.File(data, 'blbl.png'))
         await message.delete()
 
-    if (chaton_cucks_role != "") & (chaton_cucks_role in message.role_mentions):
-        img_url = str("https://cdn.discordapp.com/emojis/827938389256568832.png?v=1")
-        async with aiohttp.ClientSession() as cs:
-            async with cs.get(img_url) as r:
-                if r.status != 200:
-                    return await message.channel.send('No.')
-                data = io.BytesIO(await r.read())
-                await message.channel.send(file=discord.File(data, 'slurp.png'), silent=True)
+    # Dictionnaire associant les rôles à leur image respective (URL, nom du fichier)
+    role_response_map = {}
+    
+    if isinstance(chaton_cucks_role, discord.Role):
+        role_response_map[chaton_cucks_role] = ("https://cdn.discordapp.com/emojis/827938389256568832.png?v=1", "tkench.png")
+        
+    if isinstance(chaton_deadcucks_role, discord.Role):
+        role_response_map[chaton_deadcucks_role] = ("https://cdn.discordapp.com/emojis/1469295236835446846.webp", "trem.png")
+
+    # Vérification des mentions
+    for role, (url, filename) in role_response_map.items():
+        if role in message.role_mentions:
+            async with aiohttp.ClientSession() as cs:
+                async with cs.get(url) as r:
+                    if r.status != 200:
+                        # Continue ou log d'erreur silencieux
+                        continue 
+                    data = io.BytesIO(await r.read())
+                    await message.channel.send(file=discord.File(data, filename), silent=True)
+            # On s'arrête à la première correspondance pour ne pas spammer si plusieurs rôles sont mentionnés
+            break
 
         # global cringe_joke
         # if cringe_joke == 0:
@@ -348,5 +361,5 @@ async def on_message(message):
             # cringe_joke = 1
 
 # Lancer le bot
-token = os.getenv("TOKEN_BOT_DISCORD")
+token = os.getenv("TOKEN_BOT_DISCORD", "")
 bot.run(token)
