@@ -15,7 +15,7 @@ import os
 import re
 import io
 import aiohttp
-from resources import jowLib, hellofreshLib, nhentai, steamLib
+from resources import jowLib, hellofreshLib, doujinlib, steamLib
 import random
 try:
     from dotenv import load_dotenv
@@ -30,7 +30,7 @@ intents.guilds = True
 intents.members = True
 intents.reactions = True
 
-DEEPL = os.environ.get("DEEPL_API_KEY")
+DEEPL = os.environ.get("DEEPL_API_KEY", "")
 translator = deepl.DeepLClient(DEEPL)
 
 # Utilisation de commands.Bot pour une meilleure gestion des commandes
@@ -62,8 +62,11 @@ LANG_TO_FLAG = {
 
 my_activity = discord.Activity(name="comme il fait beau, dehors", type=discord.ActivityType.watching)
 
+steam_id_fb = os.environ.get("STEAM_ID_FB", "")
+guild_test_id = int(os.environ.get("GUILD_TEST_ID", ""))
+
 def get_book(sauce, emoji):
-    book = nhentai.Doujinshi(sauce)
+    book = doujinlib.Doujinshi(sauce)
     
     embed = discord.Embed(title=book.name, url="https://nhentai.net/g/" + str(sauce), color=0x80BA25)
     embed.set_author(name=str(sauce))
@@ -93,7 +96,8 @@ def get_book(sauce, emoji):
 #     colorday = random.choice(colors)
 #     colorint = discord.Color(colorshex[colorday])
 #     try:
-#         chaton_cute_role = bot.get_guild(240567272605876224).get_role(307297743376875520)
+#         guild_id = int(os.environ.get("GUILD_ID"))
+#         chaton_cute_role = bot.get_guild(guild_id).get_role(307297743376875520)
 #         await chaton_cute_role.edit(name='Rainbow ' + colorday, colour=colorint)
 #     except Exception as e:
 #         print(f"Error changing role color: {e}")
@@ -106,13 +110,30 @@ async def on_ready():
         print(f"Slash commands synced: {len(synced)}")
     except Exception as e:
         print(f"Error syncing slash commands: {e}")
+
     try:
         global chaton_cucks_role
-        chaton_cucks_role = bot.get_guild(240567272605876224).get_role(826563068615065719)
-        print(f"Cucks role found")
+        global chaton_deadcucks_role
+        
+        # Récupération de l'ID depuis les variables d'environnement
+        target_guild_id = os.environ.get("GUILD_ID", "")
+        target_cucks_id = os.environ.get("CUCKS_ROLE_ID", "")
+        target_deadcucks_id = os.environ.get("DEADCUCKS_ROLE_ID", "")
+        
+        if target_guild_id and target_cucks_id and target_deadcucks_id:
+            chaton_guild = bot.get_guild(int(target_guild_id))
+        
+            if chaton_guild:
+                chaton_cucks_role = chaton_guild.get_role(int(target_cucks_id))
+                chaton_deadcucks_role = chaton_guild.get_role(int(target_deadcucks_id))
+            else:
+                print(f"Le serveur avec l'ID {target_guild_id} n'a pas été trouvé.")
+        else:
+            print("GUILD_ID, CUCKS_ROLE_ID ou DEADCUCKS_ROLE_ID non défini dans les variables d'environnement.")
     except Exception as e:
         chaton_cucks_role = ""
-        print(f"Cucks role not found")
+        chaton_deadcucks_role = ""
+        print(f"Cucks role not found: {e}")
     await bot.change_presence(activity=my_activity)
     # change_role.start()
 
@@ -125,7 +146,7 @@ async def test(ctx, arg):
     app_commands.Choice(name="Oui", value=1),
     app_commands.Choice(name="Non", value=0),
     ])
-async def mennuie(interaction: discord.Interaction, steam_id: str = "76561198037697617", wish: app_commands.Choice[int] = 1):
+async def mennuie(interaction: discord.Interaction, steam_id: str = steam_id_fb, wish: app_commands.Choice[int] = 1):
     gameRand = steamLib.get_random_game(steam_id)
     if (gameRand is None):
         await interaction.response.send_message("Je ne trouve pas de jeu avec cet ID. Les jeux du profil sont privés ?", ephemeral=True)
@@ -175,7 +196,7 @@ async def hbook(interaction: discord.Interaction, reference: int, nsfw: app_comm
     
     is_dm = interaction.guild is None  # Vérifier si c'est un DM
     nsfw_shitpost = interaction.channel if is_dm else (
-        interaction.guild.get_channel(603314634442932307) if interaction.guild.id == 588460743083687998
+        interaction.guild.get_channel(603314634442932307) if interaction.guild.id == guild_test_id
         else interaction.guild.get_channel(568885536404668436)
     )
     
@@ -193,7 +214,7 @@ async def hbook(interaction: discord.Interaction, reference: int, nsfw: app_comm
             await interaction.response.send_message("Une erreur est survenue lors de la recherche de ce livre.", file=discord.File(fp, filename="error400.png"), ephemeral=True)
         
         if interaction.guild:
-            cd = bot.get_guild(588460743083687998).get_channel(603314634442932307)
+            cd = bot.get_guild(guild_test_id).get_channel(603314634442932307)
             await cd.send(f"```{str(e)}```")
         else:
             app_info = await bot.application_info()
