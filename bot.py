@@ -17,6 +17,7 @@ import io
 import aiohttp
 from resources import jowLib, hellofreshLib, steamLib
 import random
+from typing import Optional
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -36,19 +37,6 @@ translator = deepl.DeepLClient(DEEPL)
 # Utilisation de commands.Bot pour une meilleure gestion des commandes
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Configuration du bot
-colors = ['Violet', 'Indigo', 'Blue', 'Green', 'Yellow', 'Orange', 'Red']
-
-colorshex = {
-    'Violet': 9699539,
-    'Indigo': 4915330,
-    'Blue': 255,
-    'Green': 65280,
-    'Yellow': 16776960,
-    'Orange': 16744192,
-    'Red': 16711680
-}
-
 # Mapping ISO-639-1 -> Emoji flag ISO-3166
 LANG_TO_FLAG = {
     "fr": "fr",  # français
@@ -60,23 +48,13 @@ LANG_TO_FLAG = {
     "es": "es",  # espagnol
 }
 
-my_activity = discord.Activity(name="comme il fait beau, dehors", type=discord.ActivityType.watching)
+my_activity = discord.CustomActivity(
+    name="peace", 
+    type=discord.ActivityType.custom
+)
 
 steam_id_fb = os.environ.get("STEAM_ID_FB", "")
 guild_test_id = int(os.environ.get("GUILD_TEST_ID", ""))
-
-
-
-# @tasks.loop(hours=24.0)
-# async def change_role():
-#     colorday = random.choice(colors)
-#     colorint = discord.Color(colorshex[colorday])
-#     try:
-#         guild_id = int(os.environ.get("GUILD_ID"))
-#         chaton_cute_role = bot.get_guild(guild_id).get_role(307297743376875520)
-#         await chaton_cute_role.edit(name='Rainbow ' + colorday, colour=colorint)
-#     except Exception as e:
-#         print(f"Error changing role color: {e}")
 
 @bot.event
 async def on_ready():
@@ -110,7 +88,9 @@ async def on_ready():
         chaton_cucks_role = ""
         chaton_deadcucks_role = ""
         print(f"Cucks role not found: {e}")
+
     await bot.change_presence(activity=my_activity)
+
     # change_role.start()
 
 async def test(ctx, arg):
@@ -122,13 +102,14 @@ async def test(ctx, arg):
     app_commands.Choice(name="Oui", value=1),
     app_commands.Choice(name="Non", value=0),
     ])
-async def mennuie(interaction: discord.Interaction, steam_id: str = steam_id_fb, wish: app_commands.Choice[int] = 1):
+async def mennuie(interaction: discord.Interaction, steam_id: str = steam_id_fb, wish: Optional[app_commands.Choice[int]] = None):
     gameRand = steamLib.get_random_game(steam_id)
+    wish_value = wish.value if isinstance(wish, app_commands.Choice) else 1
     if (gameRand is None):
         await interaction.response.send_message("Je ne trouve pas de jeu avec cet ID. Les jeux du profil sont privés ?", ephemeral=True)
     else:
         embeds = [steamLib.get_embed(gameRand)]
-        if wish == 1:
+        if wish_value == 1:
             gameWish = steamLib.get_wishlist_game(steam_id)
             embeds.append(steamLib.get_embed(gameWish))
         await interaction.response.send_message(embeds=embeds)
@@ -154,10 +135,42 @@ async def jaifaim(interaction: discord.Interaction, ingredients: str, nombredepl
     app_commands.Choice(name="Oui", value=1),
     app_commands.Choice(name="Non", value=0),
     ])
-async def jaitresfaim(interaction: discord.Interaction, ingredients: str, facile: app_commands.Choice[int] = 1):
+async def jaitresfaim(interaction: discord.Interaction, ingredients: str, facile: Optional[app_commands.Choice[int]]):
 
-        embeds = hellofreshLib.get_recipe_embed(ingredients, facile)
+        facile_value = facile.value if isinstance(facile, app_commands.Choice) else 1
+        embeds = hellofreshLib.get_recipe_embed(ingredients, facile_value)
         await interaction.response.send_message(embeds=embeds)
+
+@bot.tree.command(name="status", description="Change le statut du bot.")
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(text="Le texte du statut.", activity_type="Le type d'activité.")
+@app_commands.choices(activity_type=[
+    app_commands.Choice(name="Joue", value=0),
+    app_commands.Choice(name="Stream", value=1),
+    app_commands.Choice(name="Écoute", value=2),
+    app_commands.Choice(name="Regarde", value=3),
+    app_commands.Choice(name="Custom", value=4),
+    app_commands.Choice(name="Classée", value=5),
+])
+async def status(interaction: discord.Interaction, text: str, activity_type: app_commands.Choice[int]):
+    try:
+        act = None
+        if activity_type.value == 0:
+            act = discord.Game(name=text)
+        elif activity_type.value == 1:
+            act = discord.Streaming(name=text, url="https://www.twitch.tv/bypus")
+        elif activity_type.value == 4:
+            act = discord.CustomActivity(name=text)
+        else:
+            # Listening (2), Watching (3), Competing (5)
+            act_type = discord.ActivityType(activity_type.value)
+            act = discord.Activity(type=act_type, name=text)
+
+        await bot.change_presence(activity=act)
+        
+        await interaction.response.send_message(f"Statut changé pour : **{activity_type.name} {text}**", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"Erreur lors du changement de statut : {e}", ephemeral=True)
 
 
 
@@ -219,7 +232,7 @@ async def get_tweet_text(username, tweet_id):
         # 🏷️ Détection de la langue
         detected_lang = None
         if tweet_text.strip():
-            detected_lang = detect_language(tweet_text)
+            detected_lang = str(detect_language(tweet_text))
 
             # ✍️ Traduction si nécessaire
             if detected_lang and detected_lang not in ["fr", "en"]:
@@ -253,13 +266,15 @@ async def on_message(message):
             clean_content,
             re.MULTILINE
         )
-
+        if not twitter_match:
+            return
+        
         is_spoiler = (
             twitter_match
             and twitter_match.group(1) is not None
             and twitter_match.group(3) is not None
         )
-        twitter_url = twitter_match.group(2) if twitter_match else None
+        twitter_url = twitter_match.group(2) if twitter_match else ""
         
         username, tweet_id = twitter_url.split("/")[-3], twitter_url.split("/")[-1]
         tweet_text, has_single_image, detected_lang = await get_tweet_text(username, tweet_id) # quote_text, quote_author, quote_date, 
@@ -320,18 +335,6 @@ async def on_message(message):
     #     await message.edit(suppress=True)
     #     modified_content = message.content.replace("www.youtube.com", "yt.cdn.13373333.one")
     #     await message.channel.send(f"🔄 [Fixed]({modified_content})", reference=message, mention_author=False)
-
-    if message.content.startswith('n. '):
-        # if '<' in message.content:
-        result = re.search(r':(.*):', message.content)
-        img_url = str(discord.utils.get(bot.emojis, name=result.group(1)).url)
-        async with aiohttp.ClientSession() as cs:
-            async with cs.get(img_url) as r:
-                if r.status != 200:
-                    return await message.channel.send('No.')
-                data = io.BytesIO(await r.read())
-                await message.channel.send(file=discord.File(data, 'blbl.png'))
-        await message.delete()
 
     # Dictionnaire associant les rôles à leur image respective (URL, nom du fichier)
     role_response_map = {}
