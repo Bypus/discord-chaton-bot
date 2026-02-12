@@ -81,6 +81,8 @@ async def on_ready():
                 chaton_cucks_role = chaton_guild.get_role(int(target_cucks_id))
                 chaton_deadcucks_role = chaton_guild.get_role(int(target_deadcucks_id))
             else:
+                chaton_cucks_role = None
+                chaton_deadcucks_role = None
                 print(f"Le serveur avec l'ID {target_guild_id} n'a pas été trouvé.")
         else:
             print("GUILD_ID, CUCKS_ROLE_ID ou DEADCUCKS_ROLE_ID non défini dans les variables d'environnement.")
@@ -286,12 +288,12 @@ async def on_message(message):
                             twitter_match.group(2))
         
 
-        formatted_message = f"🔗 [Fixuped]({fixed_link})\n"
+        formatted_message = f"🔗 [Fixed]({fixed_link})\n"
 
         await message.edit(suppress=True)
 
         if has_single_image and detected_lang in ["fr", "en"]:
-            await message.channel.send(formatted_message, reference=message, mention_author=False, silent=True)
+            await message.channel.send(formatted_message, silent=True)
             return
 
         if detected_lang not in ["fr", "en", None]:
@@ -301,7 +303,7 @@ async def on_message(message):
             formatted_message = f"||{formatted_message}||"
 
         # await message.channel.send(content=formatted_message, embeds=[embed_one, embed_two], reference=message, mention_author=False)
-        await message.channel.send(formatted_message, reference=message, mention_author=False, silent=True)
+        await message.channel.send(formatted_message, silent=True)
 
     if any(domain in message.content for domain in ["reddit.com", "instagram.com", "tiktok.com"]):
         await message.edit(suppress=True)
@@ -311,30 +313,31 @@ async def on_message(message):
             "instagram.com": "vxinstagram.com",
             "tiktok.com": "tnktok.com",
         }
-
+        print(f"Original message: {message.content}")
         fixed_urls = []
 
         for domain, replacement in replacements.items():
-            # Regex qui capture avec ou sans || (spoiler)
-            urls = re.findall(rf"(\|\|)?(https?://(?:www\.)?{re.escape(domain)}\S+)(\|\|)?", message.content)
+            # Regex qui capture avec ou sans || (spoiler) et accepte les sous-domaines
+            urls = re.findall(rf"(\|\|)?(https?://(?:[a-z0-9-]*\.)*{re.escape(domain)}\S+)(\|\|)?", message.content)
 
             for prefix, url, suffix in urls:
                 fixed_url = url.replace(domain, replacement)
                 spoilered_url = f"{prefix or ''}{fixed_url}{suffix or ''}"
-                fixed_urls.append(spoilered_url)
+                formatted_url = f"🔗 [Fixed]({spoilered_url})"
+                fixed_urls.append(formatted_url)
 
         if fixed_urls:
-            await message.channel.send("\n".join(fixed_urls), reference=message, mention_author=False, silent=True)
+            await message.channel.send("\n".join(fixed_urls), silent=True)
 
     # if "bilibili.com" in message.content: 
     #     await message.edit(suppress=True)
     #     modified_content = message.content.replace("bilibili.com", "vxbilibili.com")
-    #     await message.channel.send(f"🔄 [BiliFix]({modified_content})", reference=message, mention_author=False)
+    #     await message.channel.send(f"🔄 [BiliFix]({modified_content})", silent=True)
 
     # if "www.youtube.com" in message.content:
     #     await message.edit(suppress=True)
     #     modified_content = message.content.replace("www.youtube.com", "yt.cdn.13373333.one")
-    #     await message.channel.send(f"🔄 [Fixed]({modified_content})", reference=message, mention_author=False)
+    #     await message.channel.send(f"🔄 [Fixed]({modified_content})", silent=True)
 
     # Dictionnaire associant les rôles à leur image respective (URL, nom du fichier)
     role_response_map = {}
