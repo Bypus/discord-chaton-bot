@@ -1,6 +1,15 @@
 # discord-chaton-bot
 
-Bot Helper for a friends group discord server
+Helper bot for a friends Discord server.
+
+## Architecture
+
+The bot is now organized into modules:
+
+- `bot.py`: entry point and bot lifecycle.
+- `settings.py`: configuration (environment variables, intents, constants).
+- `cogs/slash_commands.py`: slash commands.
+- `cogs/message_handlers.py`: `on_message` listeners and link/mentions fix logic.
 
 # Commands 
 
@@ -8,12 +17,12 @@ Bot Helper for a friends group discord server
 - Owned option
 - Wishlisted options
 
-🧑‍🍳 Get a random receipe from HelloFresh's catalog
+🧑‍🍳 Get a random recipe from HelloFresh's catalog
 - Veggie option
 - Easy option
 
-🧑‍🍳 Get a random receipe from Jow's catalog
+🧑‍🍳 Get a random recipe from Jow's catalog
 - Easy option
 
 
-<sub>📙 Scrap information from an online library</sub>
+<sub>📙 Scrape information from an online library</sub>
