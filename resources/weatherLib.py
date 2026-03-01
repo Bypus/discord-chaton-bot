@@ -64,12 +64,44 @@ MONTHS_FR = {
     12: "décembre",
 }
 
-WEATHER_IMAGES = {
-    "clear": "https://images.unsplash.com/photo-1601297183305-6df142704ea2?auto=format&fit=crop&w=1600&h=500&q=80",
+WMO_CODE_TO_ICON = {
+    0: "01d",
+    1: "02d",
+    2: "03d",
+    3: "04d",
+    45: "50d",
+    48: "50d",
+    51: "09d",
+    53: "09d",
+    55: "09d",
+    56: "09d",
+    57: "09d",
+    61: "10d",
+    63: "10d",
+    65: "10d",
+    66: "10d",
+    67: "10d",
+    71: "13d",
+    73: "13d",
+    75: "13d",
+    77: "13d",
+    80: "10d",
+    81: "10d",
+    82: "10d",
+    85: "13d",
+    86: "13d",
+    95: "11d",
+    96: "11d",
+    99: "11d",
+}
+
+WEATHER_BANNERS = {
+    "clear": "https://images.unsplash.com/photo-1647580961593-6d3ccebd7924?auto=format&fit=crop&w=1600&h=500&q=80",
+    "partly_cloudy": "https://images.unsplash.com/photo-1589929495919-05051292c361?auto=format&fit=crop&w=1600&h=500&q=80",
     "cloudy": "https://images.unsplash.com/photo-1534088568595-a066f410bcda?auto=format&fit=crop&w=1600&h=500&q=80",
     "fog": "https://images.unsplash.com/photo-1487621167305-5d248087c724?auto=format&fit=crop&w=1600&h=500&q=80",
-    "rain": "https://images.unsplash.com/photo-1519692933481-e162a57d6721?auto=format&fit=crop&w=1600&h=500&q=80",
-    "snow": "https://images.unsplash.com/photo-1457269449834-928af64c684d?auto=format&fit=crop&w=1600&h=500&q=80",
+    "rain": "https://images.unsplash.com/photo-1640600997533-1b44078d394b?auto=format&fit=crop&w=1600&h=500&q=80",
+    "snow": "https://images.unsplash.com/photo-1516715094483-75da7dee9758?auto=format&fit=crop&w=1600&h=500&q=80",
     "storm": "https://images.unsplash.com/photo-1605727216801-e27ce1d0cc28?auto=format&fit=crop&w=1600&h=500&q=80",
 }
 
@@ -109,42 +141,28 @@ def _wind_direction(degrees: Optional[float]) -> str:
 
 
 def _weather_image_url(weather_code: Optional[int]) -> str:
+    icon = WMO_CODE_TO_ICON.get(weather_code, "03d")
+    return f"https://openweathermap.org/img/wn/{icon}@4x.png"
+
+
+def _weather_banner_url(weather_code: Optional[int]) -> str:
     if weather_code is None:
-        fallback = WEATHER_IMAGES["cloudy"]
-    elif weather_code == 0:
-        fallback = WEATHER_IMAGES["clear"]
-    elif weather_code in {1, 2, 3}:
-        fallback = WEATHER_IMAGES["cloudy"]
-    elif weather_code in {45, 48}:
-        fallback = WEATHER_IMAGES["fog"]
-    elif weather_code in {71, 73, 75, 77, 85, 86}:
-        fallback = WEATHER_IMAGES["snow"]
-    elif weather_code in {95, 96, 99}:
-        fallback = WEATHER_IMAGES["storm"]
-    else:
-        fallback = WEATHER_IMAGES["rain"]
-
-    return fallback
-
-
-
-def _weather_emoji(weather_code: Optional[int]) -> str:
-    if weather_code is None:
-        return "🌤️"
+        return WEATHER_BANNERS["partly_cloudy"]
     if weather_code == 0:
-        return "☀️"
-    if weather_code in {1, 2}:
-        return "🌤️"
+        return WEATHER_BANNERS["clear"]
+    if weather_code == 1:
+        return WEATHER_BANNERS["partly_cloudy"]
+    if weather_code == 2:
+        return WEATHER_BANNERS["partly_cloudy"]
     if weather_code == 3:
-        return "☁️"
+        return WEATHER_BANNERS["cloudy"]
     if weather_code in {45, 48}:
-        return "🌫️"
+        return WEATHER_BANNERS["fog"]
     if weather_code in {71, 73, 75, 77, 85, 86}:
-        return "❄️"
+        return WEATHER_BANNERS["snow"]
     if weather_code in {95, 96, 99}:
-        return "⛈️"
-    return "🌧️"
-
+        return WEATHER_BANNERS["storm"]
+    return WEATHER_BANNERS["rain"]
 
 def _get_location(city: str) -> dict:
     response = requests.get(
@@ -220,7 +238,8 @@ def get_weather_embed(city: str, target_date_raw: Optional[str] = None) -> disco
         value=f"{max_wind} km/h ({_wind_direction(wind_direction)})",
         inline=True,
     )
-    embed.set_image(url=_weather_image_url(weather_code))
+    embed.set_image(url=_weather_banner_url(weather_code))
+    embed.set_thumbnail(url=_weather_image_url(weather_code))
     embed.set_footer(text="Source: Open-Meteo")
 
     return embed
