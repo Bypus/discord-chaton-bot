@@ -4,8 +4,53 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from resources import hellofreshLib, jowLib, steamLib
+from resources import hellofreshLib, jowLib, steamLib, weatherLib
 from settings import STEAM_ID_DEFAULT
+
+
+class WeatherDateSelect(discord.ui.Select):
+    def __init__(self, city: str, requester_id: int):
+        self.city = city
+        self.requester_id = requester_id
+
+        options = [
+            discord.SelectOption(label=label, value=value)
+            for label, value in weatherLib.get_next_days_options(14)
+        ]
+
+        super().__init__(
+            placeholder="Sélectionne une date",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.requester_id:
+            await interaction.response.send_message(
+                "Ce sélecteur ne t'est pas destiné.",
+                ephemeral=True,
+            )
+            return
+
+        selected_date = self.values[0]
+        try:
+            embed = weatherLib.get_weather_embed(self.city, selected_date)
+            await interaction.response.edit_message(content=None, embed=embed, view=None)
+        except ValueError as error:
+            await interaction.response.edit_message(content=str(error), embed=None, view=None)
+        except Exception:
+            await interaction.response.edit_message(
+                content="Impossible de récupérer la météo pour le moment.",
+                embed=None,
+                view=None,
+            )
+
+
+class WeatherDateView(discord.ui.View):
+    def __init__(self, city: str, requester_id: int):
+        super().__init__(timeout=120)
+        self.add_item(WeatherDateSelect(city, requester_id))
 
 
 class SlashCommandsCog(commands.Cog):
@@ -91,6 +136,23 @@ class SlashCommandsCog(commands.Cog):
         facile_value = facile.value if isinstance(facile, app_commands.Choice) else 1
         embeds = hellofreshLib.get_recipe_embed(ingredients, facile_value)
         await interaction.response.send_message(embeds=embeds)
+
+    @app_commands.command(name="meteo", description="Affiche la météo prévue pour un jour donné.")
+    @app_commands.describe(
+        ville="Ville à rechercher (ex: Paris)",
+    )
+    async def meteo(
+        self,
+        interaction: discord.Interaction,
+        ville: str,
+    ):
+        view = WeatherDateView(ville, interaction.user.id)
+        await interaction.response.send_message(
+            "Choisis une date (14 prochains jours) pour afficher la météo.",
+            view=view,
+            ephemeral=True,
+        )
+        return
 
     @app_commands.command(name="status", description="Change le statut du bot.")
     @app_commands.default_permissions(administrator=True)

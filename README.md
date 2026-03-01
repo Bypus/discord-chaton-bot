@@ -1,6 +1,6 @@
 # discord-chaton-bot
 
-Helper bot for a friends Discord server.
+Helper bot for Discord server.
 
 ## Architecture
 
@@ -23,6 +23,9 @@ The bot is now organized into modules:
 
 🧑‍🍳 Get a random recipe from Jow's catalog
 - Easy option
+
+🌤️ Get weather forecast for a specific day
+- City option
 
 
 <sub>📙 Scrape information from an online library</sub>
