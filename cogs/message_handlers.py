@@ -43,14 +43,25 @@ class MessageHandlersCog(commands.Cog):
         except Exception as error:
             self.chaton_cucks_role = None
             self.chaton_deadcucks_role = None
-            print(f"Cucks role not found: {error}")
 
     def detect_language(self, text: str) -> Optional[str]:
         try:
             cleaned_text = text.replace("\n", " ")
             result = detect(cleaned_text)
-            if result and isinstance(result, list):
-                return result[0]["lang"]
+            if isinstance(result, dict):
+                lang = result.get("lang")
+                return lang if isinstance(lang, str) and lang else None
+
+            # Backward compatibility if the library returns a list of candidates
+            if isinstance(result, list) and result:
+                first = result[0]
+                if isinstance(first, dict):
+                    lang = first.get("lang")
+                    return lang if isinstance(lang, str) and lang else None
+
+            if isinstance(result, str) and result:
+                return result
+
             return None
         except Exception:
             return None
@@ -58,6 +69,32 @@ class MessageHandlersCog(commands.Cog):
     @staticmethod
     def format_as_quote(text: str) -> str:
         return "\n".join(f"> {line}" for line in text.split("\n"))
+
+    async def resolve_username_from_i_status(self, tweet_id: str) -> Optional[str]:
+        """Resolve the tweet author when URL uses /i/status/<tweet_id>."""
+        url = f"{NITTER_INSTANCE}/i/status/{tweet_id}"
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "fr-FR,fr;q=0.9",
+            "Referer": NITTER_INSTANCE,
+        }
+
+        try:
+            async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
+                response = await client.get(url)
+
+            if response.status_code != 200 or not response.text.strip():
+                return None
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            username_link = soup.find("a", class_="username")
+            if not username_link:
+                return None
+
+            username = username_link.get_text(strip=True).lstrip("@")
+            return username or None
+        except httpx.RequestError:
+            return None
 
     async def get_tweet_text(self, username: str, tweet_id: str):
         url = f"{NITTER_INSTANCE}/{username}/status/{tweet_id}"
@@ -87,12 +124,16 @@ class MessageHandlersCog(commands.Cog):
             detected_lang = None
             if tweet_text.strip():
                 detected_lang = str(self.detect_language(tweet_text))
+                detected_lang_base = detected_lang.split("-")[0].lower() if detected_lang else None
 
-                if detected_lang and detected_lang not in ["fr", "en"]:
+                if detected_lang_base and detected_lang_base not in ["fr", "en"]:
                     translated = self.translator.translate_text(tweet_text, target_lang="FR").text
-                    lang_flag = LANG_TO_FLAG.get(detected_lang)
+                    lang_flag = LANG_TO_FLAG.get(detected_lang_base)
                     translated = "\n".join(f"-# {line}" if line.strip() else "" for line in translated.split("\n"))
-                    tweet_text = f":flag_{lang_flag}: -> :flag_fr:\n{translated}"
+                    source_prefix = f":flag_{lang_flag}:" if lang_flag else ":speech_balloon:"
+                    tweet_text = f"{source_prefix} -> :flag_fr:\n{translated}"
+
+                detected_lang = detected_lang_base
 
             return tweet_text, has_single_image, detected_lang
         except httpx.RequestError:
@@ -111,7 +152,7 @@ class MessageHandlersCog(commands.Cog):
         if "https://x.com/" in message.content or "https://twitter.com/" in message.content:
             clean_content = re.sub(r"\n+\|\|$", "||", message.content.strip())
             twitter_match = re.search(
-                r"(\|\|\s*)?(https?://(?:x|twitter)\.com/[^/\s]+/status/\d+)(\s*\|\|)?",
+                r"(\|\|\s*)?(https?://(?:x|twitter)\.com/(?:i|[^/\s]+)/status/\d+)(\s*\|\|)?",
                 clean_content,
                 re.MULTILINE,
             )
@@ -121,8 +162,16 @@ class MessageHandlersCog(commands.Cog):
             is_spoiler = twitter_match.group(1) is not None and twitter_match.group(3) is not None
             twitter_url = twitter_match.group(2)
 
-            username = twitter_url.split("/")[-3]
-            tweet_id = twitter_url.split("/")[-1]
+            parts = [part for part in twitter_url.split("/") if part]
+            username_or_i = parts[-3]
+            tweet_id = parts[-1]
+
+            username = username_or_i
+            if username_or_i == "i":
+                resolved_username = await self.resolve_username_from_i_status(tweet_id)
+                if resolved_username:
+                    username = resolved_username
+
             tweet_text, has_single_image, detected_lang = await self.get_tweet_text(username, tweet_id)
 
             fixed_link = re.sub(
