@@ -10,9 +10,10 @@ from settings import FREE_GAMES_CHANNEL_ID, ITAD_API_KEY, ITAD_COUNTRY, STEAM_ID
 
 
 STORE_ICONS = {
-    "steam": "https://cdn.brandfetch.io/idMpZmhn_O/theme/dark/symbol.svg?c=1bxid64Mup7aczewSAYMX&t=1767337337884",
+    "steam": "https://upload.wikimedia.org/wikipedia/commons/c/c1/Steam_Logo.png",
     "epic game store": "https://upload.wikimedia.org/wikipedia/commons/d/d0/Epic_games_store_logo.png",
     "epic games store": "https://upload.wikimedia.org/wikipedia/commons/d/d0/Epic_games_store_logo.png",
+    "gog": "https://static.wikia.nocookie.net/this-war-of-mine/images/1/1a/Logo_GoG.png",
 }
 
 
@@ -113,6 +114,7 @@ class SlashCommandsCog(commands.Cog):
     def _build_free_game_embed(self, game: dict[str, object], appid: int | None = None) -> discord.Embed:
         title = str(game.get("title") or "Jeu sans titre")
         shop = str(game.get("shop") or "Store inconnu")
+        game_description = str(game.get("description") or "")
         summary = str(game.get("summary") or "Free for a limited time")
         rating = str(game.get("rating") or "")
         tags = game.get("tags")
@@ -120,27 +122,25 @@ class SlashCommandsCog(commands.Cog):
         banner_url = str(game.get("banner_url") or "")
         shop_lower = shop.lower()
 
-        description = summary
-        if rating:
-            description = f"{summary}  {rating}"
-
         embed = discord.Embed(
             title=title,
             url=url or None,
-            description=description,
+            description=f">>> {game_description}" or None,
             color=discord.Color.green(),
         )
 
-        # embed.add_field(name="Store", value=shop, inline=True)
+        embed.add_field(name=" ", value=summary, inline=False)
+        if rating:
+            embed.add_field(name=" ", value=f"{rating} ⭐", inline=False)
 
         if url:
-            embed.add_field(name="Voir l'offre", value=f"[Ouvrir dans le navigateur ⮺]({url})", inline=True)
+            embed.add_field(name=" ", value=f"[**Ouvrir dans le navigateur ⮺**]({url})", inline=True)
         if shop_lower == "steam" and appid:
             open_app_url = f"https://www.jorisstocker.ovh/open-app/steam/{appid}"
-            embed.add_field(name="Steam", value=f"[Ouvrir dans Steam ⮺]({open_app_url})", inline=True)
+            embed.add_field(name=" ", value=f"[**Ouvrir dans Steam ⮺**]({open_app_url})", inline=True)
         elif "epic" in shop_lower and appid:
             open_app_url = f"https://www.jorisstocker.ovh/open-app/epic/{appid}"
-            embed.add_field(name="Epic", value=f"[Ouvrir dans Epic ⮺]({open_app_url})", inline=True)
+            embed.add_field(name=" ", value=f"[**Ouvrir dans Epic ⮺**]({open_app_url})", inline=True)
 
         if isinstance(tags, list) and tags:
             tags_text = " | ".join(f"**{tag}**" for tag in tags[:5])
