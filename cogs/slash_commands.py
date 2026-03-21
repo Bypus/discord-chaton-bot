@@ -131,21 +131,19 @@ class SlashCommandsCog(commands.Cog):
             color=discord.Color.green(),
         )
 
-        embed.add_field(name="Store", value=shop, inline=True)
+        # embed.add_field(name="Store", value=shop, inline=True)
 
         if url:
-            embed.add_field(name="Voir l'offre", value=f"[Ouvrir]({url})", inline=True)
-        #TODO: Add direct Steam link if appid is available and store is Steam
+            embed.add_field(name="Voir l'offre", value=f"[Ouvrir dans le navigateur ⮺]({url})", inline=True)
         if shop_lower == "steam" and appid:
-            steam_url = f"https://store.steampowered.com/app/{appid}"
-            steam_app = f"steam://store/{appid}"
-            embed.add_field(name="Steam", value=f"[Ouvrir dans le navigateur]({steam_url})", inline=True)
-            embed.add_field(name="Steam", value=f"[Ouvrir dans Steam]({steam_app})", inline=True)
-        elif "epic" in shop_lower and url:
-            embed.add_field(name="Epic", value=f"[Ouvrir dans Epic]({url})", inline=True)
+            open_app_url = f"https://www.jorisstocker.ovh/open-app/steam/{appid}"
+            embed.add_field(name="Steam", value=f"[Ouvrir dans Steam ⮺]({open_app_url})", inline=True)
+        elif "epic" in shop_lower and appid:
+            open_app_url = f"https://www.jorisstocker.ovh/open-app/epic/{appid}"
+            embed.add_field(name="Epic", value=f"[Ouvrir dans Epic ⮺]({open_app_url})", inline=True)
 
         if isinstance(tags, list) and tags:
-            tags_text = " | ".join(str(tag) for tag in tags[:5])
+            tags_text = " | ".join(f"**{tag}**" for tag in tags[:5])
             embed.add_field(name="Tags", value=tags_text, inline=False)
 
         icon_url = STORE_ICONS.get(shop_lower)
