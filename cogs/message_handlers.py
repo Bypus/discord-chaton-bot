@@ -152,7 +152,7 @@ class MessageHandlersCog(commands.Cog):
         if "https://x.com/" in message.content or "https://twitter.com/" in message.content:
             clean_content = re.sub(r"\n+\|\|$", "||", message.content.strip())
             twitter_match = re.search(
-                r"(\|\|\s*)?(https?://(?:x|twitter)\.com/(?:i|[^/\s]+)/status/\d+)(\s*\|\|)?",
+                r"(\|\|\s*)?(https?://(?:x|twitter)\.com/(?:i|[^/\s]+)/status/\d+(?:\?[^\s|]+)?)(\s*\|\|)?",
                 clean_content,
                 re.MULTILINE,
             )
@@ -164,7 +164,7 @@ class MessageHandlersCog(commands.Cog):
 
             parts = [part for part in twitter_url.split("/") if part]
             username_or_i = parts[-3]
-            tweet_id = parts[-1]
+            tweet_id = parts[-1].split("?")[0]
 
             username = username_or_i
             if username_or_i == "i":
@@ -184,6 +184,8 @@ class MessageHandlersCog(commands.Cog):
             await message.edit(suppress=True)
 
             if has_single_image and detected_lang in ["fr", "en"]:
+                if is_spoiler:
+                    formatted_message = f"||{formatted_message}||"
                 await message.channel.send(formatted_message, silent=True)
                 return
 
