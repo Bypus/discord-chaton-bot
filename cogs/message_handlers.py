@@ -71,6 +71,18 @@ class MessageHandlersCog(commands.Cog):
     def format_as_quote(text: str) -> str:
         return "\n".join(f"> {line}" for line in text.split("\n"))
 
+    def translate_tweet_text(self, tweet_text: str, detected_lang: Optional[str]) -> tuple[str, Optional[str]]:
+        detected_lang_base = detected_lang.split("-")[0].lower() if isinstance(detected_lang, str) and detected_lang else None
+
+        if detected_lang_base and detected_lang_base not in ["fr", "en"]:
+            translated = self.translator.translate_text(tweet_text, target_lang="FR").text
+            lang_flag = LANG_TO_FLAG.get(detected_lang_base)
+            translated = "\n".join(f"-# {line}" if line.strip() else "" for line in translated.split("\n"))
+            source_prefix = f":flag_{lang_flag}:" if lang_flag else ":speech_balloon:"
+            tweet_text = f"{source_prefix} -> :flag_fr:\n{translated}"
+
+        return tweet_text, detected_lang_base
+
     async def fetch_nitter_page(self, path: str) -> Optional[str]:
         headers = {
             "User-Agent": "Mozilla/5.0",
@@ -108,10 +120,16 @@ class MessageHandlersCog(commands.Cog):
 
     async def get_tweet_text(self, username: str, tweet_id: str):
         try:
+            # API-first for deterministic behavior across environments (Fly and local).
+            api_result = await self.get_tweet_text_from_api(username, tweet_id)
+            if api_result[0]:
+                return api_result
+
+            print(f"API fetch failed for @{username}/{tweet_id}. Trying Nitter fallback.")
             page_text = await self.fetch_nitter_page(f"/{username}/status/{tweet_id}")
             if not page_text:
-                print(f"Unable to fetch tweet text for @{username}/{tweet_id} from any Nitter instance. Trying API fallback.")
-                return await self.get_tweet_text_from_api(username, tweet_id)
+                print(f"Unable to fetch tweet text for @{username}/{tweet_id} from API and Nitter.")
+                return None, None, None
 
             soup = BeautifulSoup(page_text, "html.parser")
             tweet_content = soup.find("div", class_="tweet-content")
@@ -125,22 +143,43 @@ class MessageHandlersCog(commands.Cog):
 
             detected_lang = None
             if tweet_text.strip():
-                detected_lang = str(self.detect_language(tweet_text))
-                detected_lang_base = detected_lang.split("-")[0].lower() if detected_lang else None
-
-                if detected_lang_base and detected_lang_base not in ["fr", "en"]:
-                    translated = self.translator.translate_text(tweet_text, target_lang="FR").text
-                    lang_flag = LANG_TO_FLAG.get(detected_lang_base)
-                    translated = "\n".join(f"-# {line}" if line.strip() else "" for line in translated.split("\n"))
-                    source_prefix = f":flag_{lang_flag}:" if lang_flag else ":speech_balloon:"
-                    tweet_text = f"{source_prefix} -> :flag_fr:\n{translated}"
-
-                detected_lang = detected_lang_base
+                tweet_text, detected_lang = self.translate_tweet_text(tweet_text, self.detect_language(tweet_text))
 
             return tweet_text, has_single_image, detected_lang
         except Exception as error:
             print(f"Error while fetching or translating tweet: {error}")
             return None, None, None
+
+    @staticmethod
+    def render_fxtwitter_raw_text(raw_text: dict) -> Optional[str]:
+        if not isinstance(raw_text, dict):
+            return None
+
+        text = raw_text.get("text")
+        facets = raw_text.get("facets", [])
+        if not isinstance(text, str) or not text.strip():
+            return None
+        if not isinstance(facets, list) or not facets:
+            return text
+
+        rendered = text
+        # Replace facets from right to left to keep indices stable.
+        ordered_facets = sorted(
+            [f for f in facets if isinstance(f, dict) and isinstance(f.get("indices"), list) and len(f.get("indices")) == 2],
+            key=lambda facet: facet["indices"][0],
+            reverse=True,
+        )
+
+        for facet in ordered_facets:
+            start, end = facet["indices"]
+            replacement = facet.get("replacement") or facet.get("original")
+            if not isinstance(start, int) or not isinstance(end, int) or not isinstance(replacement, str):
+                continue
+            if start < 0 or end > len(rendered) or start > end:
+                continue
+            rendered = rendered[:start] + replacement + rendered[end:]
+
+        return rendered
 
     async def get_tweet_text_from_api(self, username: str, tweet_id: str):
         endpoints = [
@@ -168,7 +207,8 @@ class MessageHandlersCog(commands.Cog):
                 if not tweet_text and isinstance(payload, dict):
                     tweet_data = payload.get("tweet", {})
                     if isinstance(tweet_data, dict):
-                        tweet_text = tweet_data.get("text")
+                        raw_text = tweet_data.get("raw_text")
+                        tweet_text = self.render_fxtwitter_raw_text(raw_text) or tweet_data.get("text")
                         detected_lang = tweet_data.get("lang")
                         media_extended = tweet_data.get("media", {}).get("all", []) if isinstance(tweet_data.get("media"), dict) else []
 
@@ -188,13 +228,7 @@ class MessageHandlersCog(commands.Cog):
 
                 has_single_image = image_count == 1 and video_count == 0
 
-                detected_lang_base = detected_lang.split("-")[0].lower() if isinstance(detected_lang, str) and detected_lang else None
-                if detected_lang_base and detected_lang_base not in ["fr", "en"]:
-                    translated = self.translator.translate_text(str(tweet_text), target_lang="FR").text
-                    lang_flag = LANG_TO_FLAG.get(detected_lang_base)
-                    translated = "\n".join(f"-# {line}" if line.strip() else "" for line in translated.split("\n"))
-                    source_prefix = f":flag_{lang_flag}:" if lang_flag else ":speech_balloon:"
-                    tweet_text = f"{source_prefix} -> :flag_fr:\n{translated}"
+                tweet_text, detected_lang_base = self.translate_tweet_text(str(tweet_text), detected_lang)
 
                 return str(tweet_text), has_single_image, detected_lang_base
             except Exception as error:
