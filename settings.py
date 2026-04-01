@@ -31,6 +31,11 @@ FREE_GAMES_CHANNEL_ID = os.getenv("FREE_GAMES_CHANNEL_ID", "")
 
 ITAD_BASE_URL = "https://api.isthereanydeal.com"
 NITTER_INSTANCE = "https://nitter.net"
+NITTER_INSTANCES = [
+    NITTER_INSTANCE,
+    "https://nitter.poast.org",
+    "https://nitter.privacydev.net",
+]
 
 DEFAULT_ACTIVITY = discord.CustomActivity(
     name="peace",

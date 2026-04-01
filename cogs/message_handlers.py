@@ -17,6 +17,7 @@ from settings import (
     GUILD_ID,
     LANG_TO_FLAG,
     NITTER_INSTANCE,
+    NITTER_INSTANCES,
 )
 
 
@@ -70,48 +71,49 @@ class MessageHandlersCog(commands.Cog):
     def format_as_quote(text: str) -> str:
         return "\n".join(f"> {line}" for line in text.split("\n"))
 
+    async def fetch_nitter_page(self, path: str) -> Optional[str]:
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "fr-FR,fr;q=0.9",
+            "Referer": NITTER_INSTANCE,
+        }
+
+        for instance in NITTER_INSTANCES:
+            try:
+                async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
+                    response = await client.get(f"{instance}{path}")
+
+                if response.status_code == 200 and response.text.strip():
+                    return response.text
+
+                print(f"Nitter instance failed: {instance} returned {response.status_code}")
+            except httpx.RequestError as error:
+                print(f"Nitter request failed on {instance}: {error}")
+
+        return None
+
     async def resolve_username_from_i_status(self, tweet_id: str) -> Optional[str]:
         """Resolve the tweet author when URL uses /i/status/<tweet_id>."""
-        url = f"{NITTER_INSTANCE}/i/status/{tweet_id}"
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept-Language": "fr-FR,fr;q=0.9",
-            "Referer": NITTER_INSTANCE,
-        }
-
-        try:
-            async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
-                response = await client.get(url)
-
-            if response.status_code != 200 or not response.text.strip():
-                return None
-
-            soup = BeautifulSoup(response.text, "html.parser")
-            username_link = soup.find("a", class_="username")
-            if not username_link:
-                return None
-
-            username = username_link.get_text(strip=True).lstrip("@")
-            return username or None
-        except httpx.RequestError:
+        page_text = await self.fetch_nitter_page(f"/i/status/{tweet_id}")
+        if not page_text:
             return None
 
+        soup = BeautifulSoup(page_text, "html.parser")
+        username_link = soup.find("a", class_="username")
+        if not username_link:
+            return None
+
+        username = username_link.get_text(strip=True).lstrip("@")
+        return username or None
+
     async def get_tweet_text(self, username: str, tweet_id: str):
-        url = f"{NITTER_INSTANCE}/{username}/status/{tweet_id}"
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept-Language": "fr-FR,fr;q=0.9",
-            "Referer": NITTER_INSTANCE,
-        }
-
         try:
-            async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
-                response = await client.get(url)
-
-            if response.status_code != 200 or not response.text.strip():
+            page_text = await self.fetch_nitter_page(f"/{username}/status/{tweet_id}")
+            if not page_text:
+                print(f"Unable to fetch tweet text for @{username}/{tweet_id} from any Nitter instance.")
                 return None, None, None
 
-            soup = BeautifulSoup(response.text, "html.parser")
+            soup = BeautifulSoup(page_text, "html.parser")
             tweet_content = soup.find("div", class_="tweet-content")
             tweet_text = tweet_content.get_text("\n", strip=True) if tweet_content else ""
 
@@ -136,8 +138,8 @@ class MessageHandlersCog(commands.Cog):
                 detected_lang = detected_lang_base
 
             return tweet_text, has_single_image, detected_lang
-        except httpx.RequestError:
-            print("HTTP Request Error while fetching tweet.")
+        except Exception as error:
+            print(f"Error while fetching or translating tweet: {error}")
             return None, None, None
 
     @commands.Cog.listener()
