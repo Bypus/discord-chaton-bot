@@ -110,8 +110,8 @@ class MessageHandlersCog(commands.Cog):
         try:
             page_text = await self.fetch_nitter_page(f"/{username}/status/{tweet_id}")
             if not page_text:
-                print(f"Unable to fetch tweet text for @{username}/{tweet_id} from any Nitter instance.")
-                return None, None, None
+                print(f"Unable to fetch tweet text for @{username}/{tweet_id} from any Nitter instance. Trying API fallback.")
+                return await self.get_tweet_text_from_api(username, tweet_id)
 
             soup = BeautifulSoup(page_text, "html.parser")
             tweet_content = soup.find("div", class_="tweet-content")
@@ -141,6 +141,66 @@ class MessageHandlersCog(commands.Cog):
         except Exception as error:
             print(f"Error while fetching or translating tweet: {error}")
             return None, None, None
+
+    async def get_tweet_text_from_api(self, username: str, tweet_id: str):
+        endpoints = [
+            f"https://api.vxtwitter.com/{username}/status/{tweet_id}",
+            f"https://api.fxtwitter.com/{username}/status/{tweet_id}",
+        ]
+
+        for endpoint in endpoints:
+            try:
+                async with httpx.AsyncClient(follow_redirects=True, timeout=20) as client:
+                    response = await client.get(endpoint)
+
+                if response.status_code != 200:
+                    print(f"Fallback API returned {response.status_code}: {endpoint}")
+                    continue
+
+                payload = response.json()
+
+                # vxtwitter: flat payload with text/lang/media_extended
+                tweet_text = payload.get("text") if isinstance(payload, dict) else None
+                detected_lang = payload.get("lang") if isinstance(payload, dict) else None
+                media_extended = payload.get("media_extended", []) if isinstance(payload, dict) else []
+
+                # fxtwitter: nested payload under tweet
+                if not tweet_text and isinstance(payload, dict):
+                    tweet_data = payload.get("tweet", {})
+                    if isinstance(tweet_data, dict):
+                        tweet_text = tweet_data.get("text")
+                        detected_lang = tweet_data.get("lang")
+                        media_extended = tweet_data.get("media", {}).get("all", []) if isinstance(tweet_data.get("media"), dict) else []
+
+                if not tweet_text or not str(tweet_text).strip():
+                    continue
+
+                image_count = 0
+                video_count = 0
+                for media in media_extended if isinstance(media_extended, list) else []:
+                    if not isinstance(media, dict):
+                        continue
+                    media_type = str(media.get("type", "")).lower()
+                    if media_type in ["photo", "image"]:
+                        image_count += 1
+                    elif media_type:
+                        video_count += 1
+
+                has_single_image = image_count == 1 and video_count == 0
+
+                detected_lang_base = detected_lang.split("-")[0].lower() if isinstance(detected_lang, str) and detected_lang else None
+                if detected_lang_base and detected_lang_base not in ["fr", "en"]:
+                    translated = self.translator.translate_text(str(tweet_text), target_lang="FR").text
+                    lang_flag = LANG_TO_FLAG.get(detected_lang_base)
+                    translated = "\n".join(f"-# {line}" if line.strip() else "" for line in translated.split("\n"))
+                    source_prefix = f":flag_{lang_flag}:" if lang_flag else ":speech_balloon:"
+                    tweet_text = f"{source_prefix} -> :flag_fr:\n{translated}"
+
+                return str(tweet_text), has_single_image, detected_lang_base
+            except Exception as error:
+                print(f"Fallback API error on {endpoint}: {error}")
+
+        return None, None, None
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
