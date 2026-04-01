@@ -120,16 +120,11 @@ class MessageHandlersCog(commands.Cog):
 
     async def get_tweet_text(self, username: str, tweet_id: str):
         try:
-            # API-first for deterministic behavior across environments (Fly and local).
-            api_result = await self.get_tweet_text_from_api(username, tweet_id)
-            if api_result[0]:
-                return api_result
-
-            print(f"API fetch failed for @{username}/{tweet_id}. Trying Nitter fallback.")
+            # Keep dev-quality translation by prioritizing Nitter text first.
             page_text = await self.fetch_nitter_page(f"/{username}/status/{tweet_id}")
             if not page_text:
-                print(f"Unable to fetch tweet text for @{username}/{tweet_id} from API and Nitter.")
-                return None, None, None
+                print(f"Unable to fetch tweet text for @{username}/{tweet_id} from Nitter. Trying API fallback.")
+                return await self.get_tweet_text_from_api(username, tweet_id)
 
             soup = BeautifulSoup(page_text, "html.parser")
             tweet_content = soup.find("div", class_="tweet-content")
