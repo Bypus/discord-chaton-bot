@@ -25,11 +25,7 @@ DEEPL_API_KEY = os.getenv("DEEPL_API_KEY", "")
 GUILD_ID = os.getenv("GUILD_ID", "")
 CUCKS_ROLE_ID = os.getenv("CUCKS_ROLE_ID", "")
 DEADCUCKS_ROLE_ID = os.getenv("DEADCUCKS_ROLE_ID", "")
-ITAD_API_KEY = os.getenv("ITAD_API_KEY", "")
-ITAD_COUNTRY = os.getenv("ITAD_COUNTRY", "FR")
-FREE_GAMES_CHANNEL_ID = os.getenv("FREE_GAMES_CHANNEL_ID", "")
 
-ITAD_BASE_URL = "https://api.isthereanydeal.com"
 NITTER_INSTANCE = "https://nitter.net"
 NITTER_INSTANCES = [
     NITTER_INSTANCE,
