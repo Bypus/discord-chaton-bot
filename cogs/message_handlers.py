@@ -71,10 +71,25 @@ class MessageHandlersCog(commands.Cog):
     def format_as_quote(text: str) -> str:
         return "\n".join(f"> {line}" for line in text.split("\n"))
 
+    @staticmethod
+    def has_meaningful_text(text: str) -> bool:
+        """Return False for texts that are only URLs/placeholders/whitespace."""
+        if not isinstance(text, str) or not text.strip():
+            return False
+
+        # Remove URLs and whitespace, then check if something meaningful remains.
+        without_urls = re.sub(r"https?://\S+", "", text)
+        normalized = re.sub(r"\s+", "", without_urls)
+        return bool(normalized)
+
     def translate_tweet_text(self, tweet_text: str, detected_lang: Optional[str]) -> tuple[str, Optional[str]]:
+        if not self.has_meaningful_text(tweet_text):
+            return tweet_text, None
+
         detected_lang_base = detected_lang.split("-")[0].lower() if isinstance(detected_lang, str) and detected_lang else None
 
-        if detected_lang_base and detected_lang_base not in ["fr", "en"]:
+        # zxx/und/art/qme are not useful language codes for translation decisions.
+        if detected_lang_base and detected_lang_base not in ["fr", "en", "zxx", "und", "art", "qme"]:
             translated = self.translator.translate_text(tweet_text, target_lang="FR").text
             lang_flag = LANG_TO_FLAG.get(detected_lang_base)
             translated = "\n".join(f"-# {line}" if line.strip() else "" for line in translated.split("\n"))
