@@ -109,6 +109,11 @@ class MessageHandlersCog(commands.Cog):
             text,
         )
 
+    @staticmethod
+    def linkify_mentions(text: str) -> str:
+        """Turn @username into a clickable markdown link to X profile."""
+        return re.sub(r"(?<!\[)@(\w+)", lambda m: f"[@{m.group(1)}](https://x.com/{m.group(1)})", text)
+
     def translate_tweet_text(self, tweet_text: str, detected_lang: Optional[str]) -> tuple[str, Optional[str]]:
         if not self.has_meaningful_text(tweet_text):
             return tweet_text, None
@@ -120,7 +125,7 @@ class MessageHandlersCog(commands.Cog):
             # Protect URLs and hashtags from being translated using DeepL XML tag handling
             protected = tweet_text
             matches = []
-            for pattern in [r"https?://\S+", r"(?<!\S)[\w.-]+\.(?:be|com|org|net|io|co|me|tv|gg|ly|cc|to)/\S+", r"#\S+"]:
+            for pattern in [r"https?://\S+", r"(?<!\S)[\w.-]+\.(?:be|com|org|net|io|co|me|tv|gg|ly|cc|to)/\S+", r"#\S+", r"@\w+"]:
                 for match in re.finditer(pattern, protected):
                     matches.append((match.start(), match.end(), match.group(0)))
 
@@ -141,6 +146,7 @@ class MessageHandlersCog(commands.Cog):
             tweet_text = translated
 
         tweet_text = self.linkify_hashtags(tweet_text)
+        tweet_text = self.linkify_mentions(tweet_text)
         tweet_text = self.linkify_bare_urls(tweet_text)
         return tweet_text, detected_lang_base
 
