@@ -436,10 +436,10 @@ class MessageHandlersCog(commands.Cog):
                 q_translated, _ = self.translate_tweet_text(q_text, q_lang)
                 q_text = q_translated
 
-            if q_author and q_author != q_username:
-                q_header = f"**{q_author}** · @{q_username}"
+            if q_username:
+                q_header = f"[repost](https://x.com/{username}/status/{twitter_url.rstrip('/').split('/')[-1]}) de [@{q_username}](https://x.com/{q_username})"
             else:
-                q_header = f"@{q_username}" if q_username else ""
+                q_header = ""
             # Format as Discord quote (> prefix)
             q_all_lines = []
             if q_header:
@@ -463,7 +463,7 @@ class MessageHandlersCog(commands.Cog):
         footer_parts = ["𝕏", f"[Ouvrir le tweet]({twitter_url})"]
         has_any_video = tweet_data.get("has_video") or (quote and quote.get("video_url"))
         lang = tweet_data.get("detected_lang")
-        if lang and lang not in ["fr", "en"]:
+        if lang and lang not in ["fr", "en", "zxx", "und", "art", "qme"]:
             lang_names = {
                 "ja": "japonais", "ko": "coréen", "zh": "chinois", "de": "allemand",
                 "es": "espagnol", "pt": "portugais", "it": "italien", "ru": "russe",
