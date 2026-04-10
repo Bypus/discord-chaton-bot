@@ -440,13 +440,13 @@ class MessageHandlersCog(commands.Cog):
                 q_header = f"**{q_author}** · @{q_username}"
             else:
                 q_header = f"@{q_username}" if q_username else ""
-            # Prefix every line with -# for small text
+            # Format as Discord quote (> prefix)
             q_all_lines = []
             if q_header:
                 q_all_lines.append(q_header)
             if q_text:
                 q_all_lines.extend(q_text.split("\n"))
-            children.append(discord.ui.TextDisplay("\n".join(f"-# {line}" if line.strip() else "" for line in q_all_lines)))
+            children.append(discord.ui.TextDisplay("\n".join(f"> {line}" if line.strip() else ">" for line in q_all_lines)))
 
             # Quote media
             q_media_urls = list(quote.get("images", []))[:4]
