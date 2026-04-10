@@ -115,6 +115,9 @@ class MessageHandlersCog(commands.Cog):
         return re.sub(r"(?<!\[)@(\w+)", lambda m: f"[@{m.group(1)}](https://x.com/{m.group(1)})", text)
 
     def translate_tweet_text(self, tweet_text: str, detected_lang: Optional[str]) -> tuple[str, Optional[str]]:
+        # Strip t.co shortened links (video/media URLs appended by Twitter)
+        tweet_text = re.sub(r"https?://t\.co/\S+", "", tweet_text).strip()
+
         if not self.has_meaningful_text(tweet_text):
             return tweet_text, None
 
@@ -437,17 +440,18 @@ class MessageHandlersCog(commands.Cog):
                 q_text = q_translated
 
             if q_username:
-                q_header = f"[repost](https://x.com/{username}/status/{twitter_url.rstrip('/').split('/')[-1]}) de [@{q_username}](https://x.com/{q_username})"
+                q_header = f"[Repost](https://x.com/{username}/status/{twitter_url.rstrip('/').split('/')[-1]}) de **{q_author}** · [@{q_username}](https://x.com/{q_username})"
             else:
                 q_header = ""
-            # Format as Discord quote (> prefix)
             q_all_lines = []
             if q_header:
                 q_all_lines.append(q_header)
+            # Format as Discord quote (> prefix)
             if q_text:
-                q_all_lines.extend(q_text.split("\n"))
-            children.append(discord.ui.TextDisplay("\n".join(f"> {line}" if line.strip() else ">" for line in q_all_lines)))
-
+                quoted_text = "\n".join(f"> {line}" if line.strip() else ">" for line in q_text.split("\n"))
+                q_all_lines.append(quoted_text)
+            children.append(discord.ui.TextDisplay("\n".join(q_all_lines)))
+            
             # Quote media
             q_media_urls = list(quote.get("images", []))[:4]
             if quote.get("video_url"):
