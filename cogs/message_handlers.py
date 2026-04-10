@@ -213,7 +213,9 @@ class MessageHandlersCog(commands.Cog):
                 src = avatar_el["src"].replace("%2F", "/")
                 pbs_match = re.search(r"profile_images/(.+)", src)
                 if pbs_match:
-                    author_avatar = f"https://pbs.twimg.com/profile_images/{pbs_match.group(1)}"
+                    avatar_url = f"https://pbs.twimg.com/profile_images/{pbs_match.group(1)}"
+                    # Use high-res avatar if possible
+                    author_avatar = re.sub(r"_(normal|bigger)", "_200x200", avatar_url)
 
             # Extract images and detect video
             images = []
