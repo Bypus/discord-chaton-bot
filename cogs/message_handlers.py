@@ -250,7 +250,7 @@ class MessageHandlersCog(commands.Cog):
             return {
                 "text": tweet_text, "images": images, "video_url": video_url, "has_video": has_video,
                 "detected_lang": detected_lang, "author_name": author_name, "author_avatar": author_avatar,
-                "quote": quote,
+                "user_screen_name": user_screen_name, "quote": quote,
             }
         except Exception as error:
             print(f"Error while fetching or translating tweet: {error}")
@@ -390,14 +390,17 @@ class MessageHandlersCog(commands.Cog):
 
     def build_tweet_view(self, username: str, twitter_url: str, fixed_link: str, tweet_data: dict, is_spoiler: bool) -> discord.ui.LayoutView:
         """Build a Components V2 LayoutView for a tweet."""
-        view = discord.ui.LayoutView()
+        # Add blue accent bar for Twitter
+        view = discord.ui.LayoutView(accent_colour=0x1da1f2)
 
         # Build description lines
         lines = []
-        if tweet_data.get("author_name") and tweet_data["author_name"] != username:
-            lines.append(f"**{tweet_data['author_name']}** · [@{username}](https://x.com/{username})")
+        # Always use the resolved username for the @ link
+        resolved_username = tweet_data.get("user_screen_name") or username
+        if tweet_data.get("author_name") and tweet_data["author_name"] != resolved_username:
+            lines.append(f"**{tweet_data['author_name']}** · [@{resolved_username}](https://x.com/{resolved_username})")
         else:
-            lines.append(f"[@{username}](https://x.com/{username})")
+            lines.append(f"[@{resolved_username}](https://x.com/{resolved_username})")
 
         if tweet_data.get("text"):
             lines.append("")
