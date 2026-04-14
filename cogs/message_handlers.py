@@ -6,7 +6,6 @@ import aiohttp
 import deepl
 import discord
 import httpx
-from bs4 import BeautifulSoup
 from discord.ext import commands
 from fast_langdetect import detect
 
@@ -16,8 +15,6 @@ from settings import (
     DEEPL_API_KEY,
     GUILD_ID,
     LANG_TO_FLAG,
-    NITTER_INSTANCE,
-    NITTER_INSTANCES,
 )
 
 
@@ -151,110 +148,41 @@ class MessageHandlersCog(commands.Cog):
         tweet_text = self.linkify_hashtags(tweet_text)
         tweet_text = self.linkify_mentions(tweet_text)
         tweet_text = self.linkify_bare_urls(tweet_text)
+
         return tweet_text, detected_lang_base
 
-    async def fetch_nitter_page(self, path: str) -> Optional[str]:
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept-Language": "fr-FR,fr;q=0.9",
-            "Referer": NITTER_INSTANCE,
-        }
-
-        for instance in NITTER_INSTANCES:
+    async def resolve_username_from_i_status(self, tweet_id: str) -> Optional[str]:
+        """Resolve the tweet author when URL uses /i/status/<tweet_id> via vxtwitter/fxtwitter."""
+        endpoints = [
+            f"https://api.vxtwitter.com/i/status/{tweet_id}",
+            f"https://api.fxtwitter.com/i/status/{tweet_id}",
+        ]
+        for endpoint in endpoints:
             try:
-                async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
-                    response = await client.get(f"{instance}{path}")
-
-                if response.status_code == 200 and response.text.strip():
-                    return response.text
-
-                print(f"Nitter instance failed: {instance} returned {response.status_code}")
-            except httpx.RequestError as error:
-                print(f"Nitter request failed on {instance}: {error}")
-
+                async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
+                    response = await client.get(endpoint)
+                if response.status_code != 200:
+                    continue
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    continue
+                # vxtwitter flat
+                username = payload.get("user_screen_name")
+                # fxtwitter nested
+                if not username:
+                    tweet_data = payload.get("tweet", {})
+                    if isinstance(tweet_data, dict):
+                        author = tweet_data.get("author", {})
+                        username = author.get("screen_name") if isinstance(author, dict) else None
+                if username:
+                    return str(username)
+            except Exception as error:
+                print(f"resolve_username error on {endpoint}: {error}")
         return None
 
-    async def resolve_username_from_i_status(self, tweet_id: str) -> Optional[str]:
-        """Resolve the tweet author when URL uses /i/status/<tweet_id>."""
-        page_text = await self.fetch_nitter_page(f"/i/status/{tweet_id}")
-        if not page_text:
-            return None
-
-        soup = BeautifulSoup(page_text, "html.parser")
-        username_link = soup.find("a", class_="username")
-        if not username_link:
-            return None
-
-        username = username_link.get_text(strip=True).lstrip("@")
-        return username or None
-
     async def get_tweet_data(self, username: str, tweet_id: str) -> dict:
-        """Fetch tweet data including text, images, and author info."""
-        empty = {"text": None, "images": [], "video_url": None, "has_video": False, "detected_lang": None, "author_name": username, "author_avatar": None, "quote": None}
-        try:
-            page_text = await self.fetch_nitter_page(f"/{username}/status/{tweet_id}")
-            if not page_text:
-                print(f"Unable to fetch tweet text for @{username}/{tweet_id} from Nitter. Trying API fallback.")
-                return await self._get_tweet_data_from_api(username, tweet_id)
-
-            soup = BeautifulSoup(page_text, "html.parser")
-            tweet_content = soup.find("div", class_="tweet-content")
-            tweet_text = tweet_content.get_text("\n", strip=True) if tweet_content else ""
-            tweet_text = self.reverse_nitter_urls(tweet_text)
-
-            # Extract author info
-            author_name = username
-            fullname_el = soup.find("a", class_="fullname")
-            if fullname_el:
-                author_name = fullname_el.get_text(strip=True)
-            author_avatar = None
-            avatar_el = soup.find("img", class_="avatar")
-            if avatar_el and avatar_el.get("src"):
-                src = avatar_el["src"].replace("%2F", "/")
-                pbs_match = re.search(r"profile_images/(.+)", src)
-                if pbs_match:
-                    avatar_url = f"https://pbs.twimg.com/profile_images/{pbs_match.group(1)}"
-                    # Use high-res avatar if possible
-                    author_avatar = re.sub(r"_(normal|bigger)", "_200x200", avatar_url)
-
-            # Extract images and detect video
-            images = []
-            video_url = None
-            has_video = False
-            quote = None
-            attachments = soup.find("div", class_="attachments")
-
-            # Fetch API data for video URLs and quote tweets (Nitter doesn't expose these)
-            needs_api = (attachments and "video" in str(attachments)) or soup.find("div", class_="quote")
-            api_data = None
-            if needs_api:
-                api_data = await self._get_tweet_data_from_api(username, tweet_id)
-
-            if attachments:
-                has_video = "video" in str(attachments)
-                if has_video and api_data:
-                    video_url = api_data.get("video_url")
-                for img in attachments.find_all("img"):
-                    src = img.get("src", "").replace("%2F", "/")
-                    media_match = re.search(r"/pic/(?:orig/)?media/(.+)", src)
-                    if media_match:
-                        images.append(f"https://pbs.twimg.com/media/{media_match.group(1)}")
-
-            if api_data:
-                quote = api_data.get("quote")
-
-            detected_lang = None
-            if tweet_text.strip():
-                tweet_text, detected_lang = self.translate_tweet_text(tweet_text, self.detect_language(tweet_text))
-
-            return {
-                "text": tweet_text, "images": images, "video_url": video_url, "has_video": has_video,
-                "detected_lang": detected_lang, "author_name": author_name, "author_avatar": author_avatar,
-                "user_screen_name": user_screen_name, "quote": quote,
-            }
-        except Exception as error:
-            print(f"Error while fetching or translating tweet: {error}")
-            return empty
+        """Fetch tweet data via vxtwitter/fxtwitter APIs."""
+        return await self._get_tweet_data_from_api(username, tweet_id)
 
     @staticmethod
     def render_fxtwitter_raw_text(raw_text: dict) -> Optional[str]:
@@ -343,6 +271,7 @@ class MessageHandlersCog(commands.Cog):
                     continue
 
                 payload = response.json()
+
                 if not isinstance(payload, dict):
                     continue
 
@@ -351,7 +280,10 @@ class MessageHandlersCog(commands.Cog):
                 detected_lang = payload.get("lang")
                 media_extended = payload.get("media_extended", [])
                 author_name = payload.get("user_name") or payload.get("user_screen_name")
+                author_screen_name = payload.get("user_screen_name")
                 author_avatar = payload.get("user_profile_image_url")
+                if author_avatar:
+                    author_avatar = re.sub(r"_(normal|bigger|mini)", "_200x200", author_avatar)
 
                 # fxtwitter: nested payload under tweet
                 if not tweet_text:
@@ -364,6 +296,7 @@ class MessageHandlersCog(commands.Cog):
                         author_data = tweet_data.get("author", {})
                         if isinstance(author_data, dict):
                             author_name = author_name or author_data.get("name")
+                            author_screen_name = author_screen_name or author_data.get("screen_name")
                             author_avatar = author_avatar or author_data.get("avatar_url")
 
                 if not tweet_text or not str(tweet_text).strip():
@@ -380,8 +313,9 @@ class MessageHandlersCog(commands.Cog):
 
                 return {
                     "text": str(tweet_text), "images": images, "video_url": video_url, "has_video": video_url is not None,
-                    "detected_lang": detected_lang_base, "author_name": author_name or username, "author_avatar": author_avatar,
-                    "quote": quote,
+                    "detected_lang": detected_lang_base, "author_name": author_name or username,
+                    "user_screen_name": author_screen_name or username,
+                    "author_avatar": author_avatar, "quote": quote,
                 }
             except Exception as error:
                 print(f"Fallback API error on {endpoint}: {error}")
@@ -391,8 +325,7 @@ class MessageHandlersCog(commands.Cog):
     def build_tweet_view(self, username: str, twitter_url: str, fixed_link: str, tweet_data: dict, is_spoiler: bool) -> discord.ui.LayoutView:
         """Build a Components V2 LayoutView for a tweet."""
         # Add blue accent bar for Twitter
-        view = discord.ui.LayoutView(accent_colour=0x1da1f2)
-
+        view = discord.ui.LayoutView()
         # Build description lines
         lines = []
         # Always use the resolved username for the @ link
@@ -486,6 +419,7 @@ class MessageHandlersCog(commands.Cog):
         container = discord.ui.Container(
             *children,
             spoiler=is_spoiler,
+            accent_colour=0x1da1f2
         )
         view.add_item(container)
         return view
