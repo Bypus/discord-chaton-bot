@@ -224,8 +224,9 @@ class MessageHandlersCog(commands.Cog):
             if not isinstance(media, dict):
                 continue
             media_type = str(media.get("type", "")).lower()
+
             if media_type in ["photo", "image"]:
-                url = media.get("url") or media.get("media_url_https") or media.get("thumbnail_url")
+                url = media.get("media_url_https") or media.get("url") or media.get("thumbnail_url")
                 if url:
                     images.append(url)
             elif media_type in ["video", "gif"]:
@@ -314,8 +315,9 @@ class MessageHandlersCog(commands.Cog):
                 return {
                     "text": str(tweet_text), "images": images, "video_url": video_url, "has_video": video_url is not None,
                     "detected_lang": detected_lang_base, "author_name": author_name or username,
-                    "user_screen_name": author_screen_name or username,
-                    "author_avatar": author_avatar, "quote": quote,
+                    "user_screen_name": author_screen_name or username, "author_avatar": author_avatar, 
+                    "date_epoch": payload.get("date_epoch"),
+                    "quote": quote,
                 }
             except Exception as error:
                 print(f"Fallback API error on {endpoint}: {error}")
@@ -378,7 +380,7 @@ class MessageHandlersCog(commands.Cog):
                 q_text = q_translated
 
             if q_username:
-                q_header = f"[Repost](https://x.com/{username}/status/{twitter_url.rstrip('/').split('/')[-1]}) de **{q_author}** · [@{q_username}](https://x.com/{q_username})"
+                q_header = f"> [Repost](https://x.com/{username}/status/{twitter_url.rstrip('/').split('/')[-1]}) de **{q_author}** · [@{q_username}](https://x.com/{q_username})"
             else:
                 q_header = ""
             q_all_lines = []
@@ -404,6 +406,9 @@ class MessageHandlersCog(commands.Cog):
         children.append(discord.ui.Separator(visible=True, spacing=discord.enums.SeparatorSpacing.small))
         footer_parts = ["𝕏", f"[Ouvrir le tweet]({twitter_url})"]
         has_any_video = tweet_data.get("has_video") or (quote and quote.get("video_url"))
+        if tweet_data.get("date_epoch"):
+            ts = tweet_data["date_epoch"]
+            footer_parts.append(f"<t:{ts}:f>")
         lang = tweet_data.get("detected_lang")
         if lang and lang not in ["fr", "en", "zxx", "und", "art", "qme"]:
             lang_names = {
@@ -413,7 +418,7 @@ class MessageHandlersCog(commands.Cog):
                 "sv": "suédois", "uk": "ukrainien", "th": "thaï", "vi": "vietnamien",
             }
             lang_label = lang_names.get(lang, lang)
-            footer_parts.append(f"traduit du {lang_label}")
+            footer_parts.append(f"Traduit du {lang_label}")
         children.append(discord.ui.TextDisplay("-# " + " · ".join(footer_parts)))
 
         container = discord.ui.Container(
