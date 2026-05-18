@@ -320,10 +320,8 @@ class TwitterComponentHandler:
         # Build description lines
         lines = []
         resolved_username = tweet_data.get("user_screen_name") or username
-        if tweet_data.get("author_name") and tweet_data["author_name"] != resolved_username:
-            lines.append(f"**{tweet_data['author_name']}** · [@{resolved_username}](https://x.com/{resolved_username})")
-        else:
-            lines.append(f"[@{resolved_username}](https://x.com/{resolved_username})")
+        display_name = tweet_data.get("author_name") or resolved_username
+        lines.append(f"**{display_name}** · [@{resolved_username}](https://x.com/{resolved_username})")
 
         if tweet_data.get("text"):
             lines.append("")
@@ -376,9 +374,8 @@ class TwitterComponentHandler:
             if q_header:
                 q_all_lines.append(q_header)
 
-            # Format as Discord quote (> prefix)
             if q_text:
-                quoted_text = "\n".join(f"> {line}" if line.strip() else ">" for line in q_text.split("\n"))
+                quoted_text = "\n".join(f"> {line}" if line.strip() else "> " for line in q_text.split("\n"))
                 q_all_lines.append(quoted_text)
             children.append(discord.ui.TextDisplay("\n".join(q_all_lines)))
 
