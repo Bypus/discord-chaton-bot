@@ -8,3 +8,4 @@ jow-api==0.1.4
 deepl==1.21.0
 httpx>=0.28.1
 fast-langdetect>=0.2.5
+watchfiles>=0.22.0

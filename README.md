@@ -29,3 +29,14 @@ The bot is now organized into modules:
 
 
 <sub>📙 Scrape information from an online library</sub>
+
+## Hot Reload (dev)
+
+### Preferred: reload cogs without restarting the bot process
+
+1. Install dependencies: `pip install -r requirements.txt`
+2. Enable cog hot reload:
+	- PowerShell: `$env:HOT_RELOAD_COGS = "1"`
+3. Start the bot as usual: `python bot.py`
+
+When a file in `cogs/` changes, the corresponding extension is reloaded automatically.
