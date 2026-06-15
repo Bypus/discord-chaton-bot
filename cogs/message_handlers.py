@@ -75,10 +75,11 @@ class MessageHandlersCog(commands.Cog):
             return
 
         # Reddit/Instagram/TikTok handler
-        if any(domain in message.content for domain in ["reddit.com", "instagram.com", "tiktok.com"]):
+        # "reddit.com" BROKEN
+        if any(domain in message.content for domain in ["instagram.com", "tiktok.com"]):
             await message.edit(suppress=True)
+            # "reddit.com": "rxddit.com",
             replacements = {
-                "reddit.com": "rxddit.com",
                 "instagram.com": "vxinstagram.com",
                 "tiktok.com": "tnktok.com",
             }
