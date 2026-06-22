@@ -23,6 +23,7 @@ BOT_TOKEN = os.getenv("TOKEN_BOT_DISCORD", "")
 STEAM_ID_DEFAULT = os.getenv("STEAM_ID_FB", "")
 DEEPL_API_KEY = os.getenv("DEEPL_API_KEY", "")
 GUILD_ID = os.getenv("GUILD_ID", "")
+PERE_MATRIE_ID = os.getenv("PERE_MATRIE_ID", "")
 CUCKS_ROLE_ID = os.getenv("CUCKS_ROLE_ID", "")
 DEADCUCKS_ROLE_ID = os.getenv("DEADCUCKS_ROLE_ID", "")
 

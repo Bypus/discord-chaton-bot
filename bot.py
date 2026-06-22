@@ -28,6 +28,7 @@ async def on_ready():
 async def main():
     await bot.load_extension("cogs.slash_commands")
     await bot.load_extension("cogs.message_handlers")
+    await bot.load_extension("cogs.scheduler") 
 
     if os.getenv("HOT_RELOAD_COGS", "0") == "1":
         await bot.load_extension("cogs.hot_reload")
