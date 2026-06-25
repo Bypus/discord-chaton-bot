@@ -219,12 +219,14 @@ class TwitterComponentHandler:
             return None
         author_name = qrt.get("user_name") or qrt.get("user_screen_name") or ""
         username = qrt.get("user_screen_name") or ""
+        qrt_id = qrt.get("tweetID") or qrt.get("id")
         media_extended = qrt.get("media_extended", [])
         images, video_url = TwitterComponentHandler._parse_media(media_extended)
         return {
             "text": str(text),
             "author_name": author_name,
             "username": username,
+            "id": qrt_id,
             "images": images,
             "video_url": video_url,
         }
@@ -366,7 +368,9 @@ class TwitterComponentHandler:
                 q_text = q_translated
 
             if q_username:
-                q_header = f"> [Repost](https://x.com/{username}/status/{twitter_url.rstrip('/').split('/')[-1]}) de **{q_author}** · [@{q_username}](https://x.com/{q_username})"
+                q_id = quote.get("id")
+                q_url = f"https://x.com/{q_username}/status/{q_id}" if q_id else f"https://x.com/{q_username}"
+                q_header = f"> [Repost]({q_url}) de **{q_author}** · [@{q_username}](https://x.com/{q_username})"
             else:
                 q_header = ""
 
@@ -392,7 +396,6 @@ class TwitterComponentHandler:
         # Footer
         children.append(discord.ui.Separator(visible=True, spacing=discord.enums.SeparatorSpacing.small))
         footer_parts = ["𝕏", f"[Ouvrir le tweet]({twitter_url})"]
-        has_any_video = tweet_data.get("has_video") or (quote and quote.get("video_url"))
         if tweet_data.get("date_epoch"):
             ts = tweet_data["date_epoch"]
             footer_parts.append(f"<t:{ts}:f>")
