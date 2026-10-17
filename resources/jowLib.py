@@ -5,7 +5,9 @@ import random
 def get_recipe_embed(ingredients: str, limit: int = 1, couverts: int = 2):
 
     recipes = Jow.search(ingredients)
-    recipes = random.sample(recipes, limit)
+    if limit < 1 or couverts < 1:
+        raise ValueError("Le nombre de recettes et de couverts doit être positif.")
+    recipes = random.sample(recipes, min(limit, len(recipes)))
     embeds = []
     for recipe in recipes:
         embed = discord.Embed(title=recipe.name,

@@ -1,4 +1,9 @@
+import asyncio
+import logging
 import re
+from time import monotonic
+from collections import OrderedDict
+from copy import deepcopy
 from typing import Optional
 
 import deepl
@@ -10,8 +15,50 @@ from settings import DEEPL_API_KEY
 
 
 class TwitterComponentHandler:
-    def __init__(self):
-        self.translator = deepl.DeepLClient(DEEPL_API_KEY)
+    def __init__(self, *, cache_ttl=300, cache_size=256, concurrency=4,
+                 max_pending=16, queue_timeout=5):
+        if min(cache_ttl, cache_size, concurrency, max_pending, queue_timeout) <= 0:
+            raise ValueError("Twitter limits must be positive")
+        self.translator = deepl.Translator(DEEPL_API_KEY) if DEEPL_API_KEY else None
+        self.client = httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=httpx.Timeout(10, connect=5, pool=5),
+            limits=httpx.Limits(max_connections=concurrency, max_keepalive_connections=concurrency),
+        )
+        self._cache_ttl = cache_ttl
+        self._cache_size = cache_size
+        self._cache = OrderedDict()
+        self._inflight = {}
+        self._slots = asyncio.Semaphore(concurrency)
+        self._max_pending = max_pending
+        self._queue_timeout = queue_timeout
+        self._request_timeout = 20
+        self._closed = False
+
+    async def close(self):
+        self._closed = True
+        tasks = list(self._inflight.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self._cache.clear()
+        await self.client.aclose()
+
+    async def _request(self, endpoint):
+        # HTTPX timeouts cover inactivity; this also caps the whole HTTP request.
+        async with asyncio.timeout(self._request_timeout):
+            return await self.client.get(endpoint)
+
+    def prepare_text(self, text, language):
+        try:
+            return self.translate_tweet_text(text, language)
+        except Exception:
+            logging.exception("Tweet translation failed; keeping original text")
+            return self.translate_tweet_text(text, None)
+
+    def prepare_quote(self, quote):
+        text = quote.get("text") or ""
+        quote["text"], _ = self.prepare_text(text, self.detect_language(text))
 
     def detect_language(self, text: str) -> Optional[str]:
         try:
@@ -88,7 +135,7 @@ class TwitterComponentHandler:
         detected_lang_base = detected_lang.split("-")[0].lower() if isinstance(detected_lang, str) and detected_lang else None
 
         # zxx/und/art/qme are not useful language codes for translation decisions.
-        if detected_lang_base and detected_lang_base not in ["fr", "en", "zxx", "und", "art", "qme"]:
+        if self.translator and detected_lang_base and detected_lang_base not in ["fr", "en", "zxx", "und", "art", "qme"]:
             # Protect URLs, hashtags and mentions from being translated using DeepL XML tag handling
             protected = tweet_text
             matches = []
@@ -123,7 +170,7 @@ class TwitterComponentHandler:
         tweet_text = self.linkify_mentions(tweet_text)
         tweet_text = self.linkify_bare_urls(tweet_text)
 
-        return tweet_text, detected_lang_base
+        return tweet_text, detected_lang_base if self.translator else None
 
     async def resolve_username_from_i_status(self, tweet_id: str) -> Optional[str]:
         """Resolve the tweet author when URL uses /i/status/<tweet_id> via vxtwitter/fxtwitter."""
@@ -133,8 +180,7 @@ class TwitterComponentHandler:
         ]
         for endpoint in endpoints:
             try:
-                async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
-                    response = await client.get(endpoint)
+                response = await self._request(endpoint)
                 if response.status_code != 200:
                     continue
                 payload = response.json()
@@ -155,8 +201,51 @@ class TwitterComponentHandler:
         return None
 
     async def get_tweet_data(self, username: str, tweet_id: str) -> dict:
-        """Fetch tweet data via vxtwitter/fxtwitter APIs."""
-        return await self._get_tweet_data_from_api(username, tweet_id)
+        """Cache normalized data, sharing work by tweet ID across URL variants."""
+        if self._closed:
+            return {}
+        now = monotonic()
+        for key, (expires, _) in list(self._cache.items()):
+            if expires <= now:
+                del self._cache[key]
+        if tweet_id in self._cache:
+            self._cache.move_to_end(tweet_id)
+            return deepcopy(self._cache[tweet_id][1])
+        task = self._inflight.get(tweet_id)
+        if task is None:
+            if len(self._inflight) >= self._max_pending:
+                logging.warning("Twitter queue full; using fallback link")
+                return {}
+            task = asyncio.create_task(self._fetch_cached(username, tweet_id))
+            self._inflight[tweet_id] = task
+        # Cancelling one message must not cancel a fetch shared by other messages.
+        return deepcopy(await asyncio.shield(task))
+
+    async def _fetch_cached(self, username, tweet_id):
+        acquired = False
+        try:
+            try:
+                await asyncio.wait_for(self._slots.acquire(), self._queue_timeout)
+                acquired = True
+            except TimeoutError:
+                logging.warning("Twitter queue wait expired; using fallback link")
+                return {}
+            if username == "i":
+                username = await self.resolve_username_from_i_status(tweet_id) or username
+            data = await self._get_tweet_data_from_api(username, tweet_id)
+            if any(data.get(key) for key in ("text", "images", "video_url", "quote")):
+                self._cache[tweet_id] = (monotonic() + self._cache_ttl, deepcopy(data))
+                self._cache.move_to_end(tweet_id)
+                while len(self._cache) > self._cache_size:
+                    self._cache.popitem(last=False)
+            return data
+        except Exception:
+            logging.exception("Twitter fetch failed; using fallback link")
+            return {}
+        finally:
+            if acquired:
+                self._slots.release()
+            self._inflight.pop(tweet_id, None)
 
     @staticmethod
     def render_fxtwitter_raw_text(raw_text: dict) -> Optional[str]:
@@ -173,7 +262,8 @@ class TwitterComponentHandler:
         rendered = text
         # Replace facets from right to left to keep indices stable.
         ordered_facets = sorted(
-            [f for f in facets if isinstance(f, dict) and isinstance(f.get("indices"), list) and len(f.get("indices")) == 2],
+            [f for f in facets if isinstance(f, dict) and isinstance(f.get("indices"), list)
+             and len(f["indices"]) == 2 and all(isinstance(i, int) for i in f["indices"])],
             key=lambda facet: facet["indices"][0],
             reverse=True,
         )
@@ -201,27 +291,29 @@ class TwitterComponentHandler:
 
             if media_type in ["photo", "image"]:
                 url = media.get("media_url_https") or media.get("url") or media.get("thumbnail_url")
-                if url:
+                if isinstance(url, str) and url.startswith(("https://", "http://")):
                     images.append(url)
-            elif media_type in ["video", "gif"]:
+            elif media_type in ["video", "gif", "animated_gif"]:
                 url = media.get("url") or media.get("video_url")
-                if url and not video_url:
+                if isinstance(url, str) and url.startswith(("https://", "http://")) and not video_url:
                     video_url = url
         return images, video_url
 
     @staticmethod
     def _parse_qrt(qrt: dict) -> Optional[dict]:
-        """Parse a vxtwitter qrt (quote retweet) into a simple dict."""
+        """Normalize both vxtwitter quotes and fxtwitter nested statuses."""
         if not isinstance(qrt, dict):
             return None
-        text = qrt.get("text")
-        if not text or not str(text).strip():
-            return None
-        author_name = qrt.get("user_name") or qrt.get("user_screen_name") or ""
-        username = qrt.get("user_screen_name") or ""
+        text = TwitterComponentHandler.render_fxtwitter_raw_text(qrt.get("raw_text")) or qrt.get("text") or ""
+        author = qrt.get("author") if isinstance(qrt.get("author"), dict) else {}
+        author_name = qrt.get("user_name") or author.get("name") or qrt.get("user_screen_name") or ""
+        username = qrt.get("user_screen_name") or author.get("screen_name") or ""
         qrt_id = qrt.get("tweetID") or qrt.get("id")
-        media_extended = qrt.get("media_extended", [])
+        media = qrt.get("media") if isinstance(qrt.get("media"), dict) else {}
+        media_extended = qrt.get("media_extended") or media.get("all", [])
         images, video_url = TwitterComponentHandler._parse_media(media_extended)
+        if not str(text).strip() and not images and not video_url:
+            return None
         return {
             "text": str(text),
             "author_name": author_name,
@@ -249,8 +341,7 @@ class TwitterComponentHandler:
 
         for endpoint in endpoints:
             try:
-                async with httpx.AsyncClient(follow_redirects=True, timeout=20) as client:
-                    response = await client.get(endpoint)
+                response = await self._request(endpoint)
 
                 if response.status_code != 200:
                     print(f"Fallback API returned {response.status_code}: {endpoint}")
@@ -272,7 +363,7 @@ class TwitterComponentHandler:
                 #     author_avatar = re.sub(r"_(normal|bigger|mini)", "_200x200", author_avatar)
 
                 # fxtwitter: nested payload under tweet
-                if not tweet_text:
+                if isinstance(payload.get("tweet"), dict):
                     tweet_data = payload.get("tweet", {})
                     if isinstance(tweet_data, dict):
                         raw_text = tweet_data.get("raw_text")
@@ -285,10 +376,7 @@ class TwitterComponentHandler:
                             author_screen_name = author_screen_name or author_data.get("screen_name")
                             # author_avatar = author_avatar or author_data.get("avatar_url")
 
-                if not tweet_text or not str(tweet_text).strip():
-                    continue
-
-                tweet_text = self.reverse_nitter_urls(tweet_text)
+                tweet_text = self.reverse_nitter_urls(str(tweet_text or ""))
                 images, video_url = self._parse_media(media_extended)
 
                 # Quote tweet (vxtwitter: qrt, fxtwitter: quote)
@@ -296,7 +384,12 @@ class TwitterComponentHandler:
                 if not quote and isinstance(payload.get("tweet"), dict):
                     quote = self._parse_qrt(payload["tweet"].get("quote"))
 
-                tweet_text, detected_lang_base = self.translate_tweet_text(str(tweet_text), detected_lang)
+                if not tweet_text.strip() and not images and not video_url and not quote:
+                    continue
+
+                tweet_text, detected_lang_base = await asyncio.to_thread(self.prepare_text, str(tweet_text), detected_lang)
+                if quote:
+                    await asyncio.to_thread(self.prepare_quote, quote)
 
                 return {
                     "text": str(tweet_text),
@@ -307,7 +400,9 @@ class TwitterComponentHandler:
                     "author_name": author_name or username,
                     "user_screen_name": author_screen_name or username,
                     # "author_avatar": author_avatar,
-                    "date_epoch": payload.get("date_epoch"),
+                    "date_epoch": payload.get("date_epoch") or (
+                        payload["tweet"].get("created_timestamp") if isinstance(payload.get("tweet"), dict) else None
+                    ),
                     "quote": quote,
                 }
             except Exception as error:
@@ -341,7 +436,7 @@ class TwitterComponentHandler:
         #         )
         #     )
         # else:
-        children.append(discord.ui.TextDisplay(text_content))
+        children.append(discord.ui.TextDisplay(self._shorten(text_content, 2400)))
 
         # Media gallery (images and/or video)
         media_urls = list(tweet_data.get("images", []))[:4]
@@ -361,12 +456,6 @@ class TwitterComponentHandler:
             q_username = quote.get("username") or ""
             q_text = quote.get("text") or ""
 
-            # Translate quote text if needed
-            if q_text:
-                q_lang = self.detect_language(q_text)
-                q_translated, _ = self.translate_tweet_text(q_text, q_lang)
-                q_text = q_translated
-
             if q_username:
                 q_id = quote.get("id")
                 q_url = f"https://x.com/{q_username}/status/{q_id}" if q_id else f"https://x.com/{q_username}"
@@ -381,17 +470,24 @@ class TwitterComponentHandler:
             if q_text:
                 quoted_text = "\n".join(f"> {line}" if line.strip() else "> " for line in q_text.split("\n"))
                 q_all_lines.append(quoted_text)
-            children.append(discord.ui.TextDisplay("\n".join(q_all_lines)))
-
-            # Quote media
-            q_media_urls = list(quote.get("images", []))[:4]
-            if quote.get("video_url"):
-                q_media_urls.insert(0, quote["video_url"])
-            if q_media_urls:
-                q_gallery = discord.ui.MediaGallery()
-                for url in q_media_urls:
-                    q_gallery.add_item(media=url)
-                children.append(q_gallery)
+            # A single quoted image fits beside the text as a thumbnail.
+            # Keep galleries for videos and multiple images so every media stays visible.
+            q_images = list(quote.get("images") or [])[:4]
+            q_video = quote.get("video_url")
+            q_content = self._shorten("\n".join(q_all_lines) or "> Repost", 1200)
+            if len(q_images) == 1 and not q_video:
+                children.append(discord.ui.Section(
+                    discord.ui.TextDisplay(q_content),
+                    accessory=discord.ui.Thumbnail(media=q_images[0]),
+                ))
+            else:
+                children.append(discord.ui.TextDisplay(q_content))
+                q_media_urls = ([q_video] if q_video else []) + q_images
+                if q_media_urls:
+                    q_gallery = discord.ui.MediaGallery()
+                    for url in q_media_urls:
+                        q_gallery.add_item(media=url)
+                    children.append(q_gallery)
 
         # Footer
         children.append(discord.ui.Separator(visible=True, spacing=discord.enums.SeparatorSpacing.small))
@@ -421,7 +517,7 @@ class TwitterComponentHandler:
             }
             lang_label = lang_names.get(lang, lang)
             footer_parts.append(f"Traduit du {lang_label}")
-        children.append(discord.ui.TextDisplay("-# " + " · ".join(footer_parts)))
+        children.append(discord.ui.TextDisplay(self._shorten("-# " + " · ".join(footer_parts), 400)))
 
         container = discord.ui.Container(
             *children,
@@ -432,12 +528,24 @@ class TwitterComponentHandler:
         return view
 
     @staticmethod
+    def _shorten(text: str, limit: int) -> str:
+        # Count UTF-16 units conservatively, including emoji and Markdown URLs.
+        encoded = text.encode("utf-16-le")
+        if len(encoded) <= limit * 2:
+            return text
+        suffix = "\n… (suite dans le tweet original)"
+        prefix = encoded[:(limit - len(suffix)) * 2].decode("utf-16-le", errors="ignore")
+        # Avoid leaving an unfinished Markdown link in the excerpt.
+        if prefix.rfind("[") > prefix.rfind(")"):
+            prefix = prefix[:prefix.rfind("[")]
+        return prefix.rstrip() + suffix
+
+    @staticmethod
     def _extract_twitter_match(message_content: str) -> Optional[re.Match]:
         """Extract the first Twitter/X status URL match, handling spoiler wrappers."""
-        clean_content = re.sub(r"\n+\|\|$", "||", message_content.strip())
         return re.search(
             r"(\|\|\s*)?(https?://(?:x|twitter)\.com/(?:i|[^/\s]+)/status/\d+(?:\?[^\s|]+)?)(\s*\|\|)?",
-            clean_content,
+            message_content,
             re.MULTILINE,
         )
 
@@ -446,14 +554,15 @@ class TwitterComponentHandler:
 
         Returns True when the message was handled as a Twitter/X URL, else False.
         """
-        if "https://x.com/" not in message.content and "https://twitter.com/" not in message.content:
-            return False
-
         twitter_match = self._extract_twitter_match(message.content)
         if not twitter_match:
             return False
 
-        is_spoiler = twitter_match.group(1) is not None and twitter_match.group(3) is not None
+        # Also recognize a link inside a larger spoiler containing other text.
+        is_spoiler = (
+            message.content[:twitter_match.start(2)].count("||") % 2 == 1
+            and "||" in message.content[twitter_match.end(2):]
+        )
         twitter_url = twitter_match.group(2)
 
         parts = [part for part in twitter_url.split("/") if part]
@@ -461,11 +570,6 @@ class TwitterComponentHandler:
         tweet_id = parts[-1].split("?")[0]
 
         username = username_or_i
-        if username_or_i == "i":
-            resolved_username = await self.resolve_username_from_i_status(tweet_id)
-            if resolved_username:
-                username = resolved_username
-
         tweet_data = await self.get_tweet_data(username, tweet_id)
 
         fixed_link = re.sub(
@@ -474,19 +578,32 @@ class TwitterComponentHandler:
             twitter_url,
         )
 
-        # No data at all: just send the fixed link
-        if not tweet_data["text"] and not tweet_data["images"] and not tweet_data.get("video_url"):
-            await message.edit(suppress=True)
-            await message.channel.send(f"🔗 [Fixed]({fixed_link})", silent=True)
-            return True
-
-        await message.edit(suppress=True)
-        tweet_view = self.build_tweet_view(username, twitter_url, fixed_link, tweet_data, is_spoiler)
-
+        has_content = any(tweet_data.get(key) for key in ("text", "images", "video_url", "quote"))
+        sent = False
+        if has_content:
+            try:
+                tweet_view = self.build_tweet_view(username, twitter_url, fixed_link, tweet_data, is_spoiler)
+                await message.channel.send(
+                    view=tweet_view, silent=True, allowed_mentions=discord.AllowedMentions.none()
+                )
+                sent = True
+            except Exception:
+                logging.exception("Tweet rendering or sending failed; trying fallback")
+        if not sent:
+            fallback = f"🔗 [Ouvrir le tweet]({fixed_link})"
+            if is_spoiler:
+                fallback = f"||{fallback}||"
+            try:
+                await message.channel.send(
+                    fallback, silent=True, suppress_embeds=is_spoiler,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except discord.HTTPException:
+                logging.exception("Tweet fallback failed; original preview retained")
+                return True
+        # Only hide the original once a replacement has been published.
         try:
-            await message.channel.send(view=tweet_view, silent=True)
-        except Exception as error:
-            print(f"[Tweet Embed Error] {type(error).__name__}: {error}")
-            await message.channel.send(f"🔗 [Fixed]({fixed_link})", silent=True)
-
+            await message.edit(suppress=True)
+        except discord.HTTPException:
+            logging.warning("Cannot suppress original tweet preview", exc_info=True)
         return True

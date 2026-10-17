@@ -4,6 +4,7 @@ import unicodedata
 import discord
 import random
 import requests
+from pathlib import Path
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -15,7 +16,9 @@ def search_image(query):
     search_engine_id = os.environ.get("SEARCH_ENGINE_ID")  # Remplacez par votre ID de moteur de recherche personnalisé
     url = f"https://www.googleapis.com/customsearch/v1?q={query}&cx={search_engine_id}&searchType=image&key={api_key}"
     
-    response = requests.get(url).json()
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+    response = response.json()
 
     # Extraire l'URL de la première image trouvée
     if "items" in response:
@@ -31,8 +34,10 @@ def remove_accents(input_str):
     return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
 # Load the JSON file
-with open('resources/recipes.json', 'r', encoding='utf-8') as file:
+with Path(__file__).with_name('recipes.json').open(encoding='utf-8') as file:
     data = json.load(file)
+
+normalized_recipes = [(recipe, remove_accents(recipe['name'].lower())) for recipe in data]
 
 def get_recipe_embed(ingredients: str, facile: bool = True):
     # Split the input ingredients string into individual ingredients
@@ -41,20 +46,19 @@ def get_recipe_embed(ingredients: str, facile: bool = True):
     
     # Find matching recipes where all ingredients are in the recipe name
     matching_recipes = []
-    for recipe in data:  # Loop over dictionary items
+    for recipe, normalized_recipe_name in normalized_recipes:
         # Check if all ingredients are found in the recipe name
-        normalized_recipe_name = remove_accents(recipe['name'].lower())
 
         if all(ingredient in normalized_recipe_name for ingredient in normalized_ingredient_list):
             matching_recipes.append(recipe)
 
     # If no matching recipes are found
     if not matching_recipes:
-        return discord.Embed(
+        return [discord.Embed(
             title="No matching recipes found",
             description=f"No recipes found with ingredients: {', '.join(ingredient_list)}",
             color=discord.Color.red()
-        )
+        )]
 
     # If 'facile' is set to 1, find recipes with the minimum number of ingredients
     if facile:

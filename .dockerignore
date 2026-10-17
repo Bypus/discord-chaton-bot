@@ -3,3 +3,9 @@ auth.json
 .venv
 resources/__pycache__
 .vscode
+.git
+.github
+.specstory
+chaton_bot
+**/__pycache__
+tests

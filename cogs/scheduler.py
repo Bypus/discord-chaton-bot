@@ -4,27 +4,25 @@ import asyncio
 import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from settings import GUILD_ID, PERE_MATRIE_ID
 
-PARIS = timezone(timedelta(hours=1))  # CET de base
+PARIS = ZoneInfo("Europe/Paris")
 
 def get_paris_now() -> datetime:
-    utc_now = datetime.now(timezone.utc)
-    offset = 2 if 3 <= utc_now.month <= 10 else 1
-    return utc_now.astimezone(timezone(timedelta(hours=offset)))
+    return datetime.now(PARIS)
 
-def next_28_at_16h() -> datetime:
+def next_28_at_16h(now: datetime | None = None) -> datetime:
     """Retourne le prochain 28 du mois à 16h00 (Paris) en tant que datetime aware."""
-    now = get_paris_now()
+    now = get_paris_now() if now is None else now.astimezone(PARIS)
     candidate = now.replace(day=28, hour=16, minute=0, second=0, microsecond=0)
     if candidate <= now:
         # On passe au mois suivant
         first_of_next = (now.replace(day=1) + timedelta(days=32)).replace(day=1)
-        offset = 2 if 3 <= first_of_next.month <= 10 else 1
         candidate = first_of_next.replace(
             day=28, hour=16, minute=0, second=0, microsecond=0,
-            tzinfo=timezone(timedelta(hours=offset))
+            tzinfo=PARIS
         )
     return candidate
 
@@ -41,13 +39,17 @@ class ScheduledTasks(commands.Cog):
     async def cog_unload(self):
         if self._task:
             self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
 
     async def _scheduler_loop(self):
         await self.bot.wait_until_ready()
         print("[scheduler] Démarré")
         while True:
             target = next_28_at_16h()
-            delay = (target - get_paris_now()).total_seconds()
+            delay = target.timestamp() - get_paris_now().timestamp()
             print(f"[scheduler] Prochain envoi dans {delay:.0f}s ({target})")
             await asyncio.sleep(delay)
             await self._send_video()
@@ -80,7 +82,7 @@ class ScheduledTasks(commands.Cog):
     async def next_video(self, ctx):
         """Affiche quand sera envoyée la prochaine vidéo"""
         target = next_28_at_16h()
-        delay = (target - get_paris_now()).total_seconds()
+        delay = target.timestamp() - get_paris_now().timestamp()
         days, rem = divmod(int(delay), 86400)
         hours, rem = divmod(rem, 3600)
         minutes = rem // 60

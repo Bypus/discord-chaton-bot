@@ -21,6 +21,9 @@ class MessageHandlersCog(commands.Cog):
         self.chaton_cucks_role: Optional[discord.Role] = None
         self.chaton_deadcucks_role: Optional[discord.Role] = None
 
+    async def cog_unload(self):
+        await self.twitter_handler.close()
+
     async def initialize_roles(self):
         try:
             if GUILD_ID and CUCKS_ROLE_ID and DEADCUCKS_ROLE_ID:
@@ -40,12 +43,13 @@ class MessageHandlersCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author == self.bot.user:
+        if message.author.bot:
             return
 
         if message.mention_everyone:
             emoji = discord.utils.get(self.bot.emojis, name="angerypingcircle")
-            await message.add_reaction(emoji)
+            if emoji is not None:
+                await message.add_reaction(emoji)
 
         # Role mentions (before URL handlers which may delete the message)
         role_response_map = {}
@@ -75,7 +79,7 @@ class MessageHandlersCog(commands.Cog):
             return
 
         # Reddit/Instagram/TikTok handler
-        if any(domain in message.content for domain in ["reddit.com, instagram.com", "tiktok.com"]):
+        if any(domain in message.content for domain in ["reddit.com", "instagram.com", "tiktok.com"]):
             await message.edit(suppress=True)
             replacements = {
                 "reddit.com": "vxreddit.com",

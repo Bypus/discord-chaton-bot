@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from typing import Optional
 
 import discord
@@ -34,13 +36,15 @@ class WeatherDateSelect(discord.ui.Select):
             return
 
         selected_date = self.values[0]
+        await interaction.response.defer()
         try:
-            embed = weatherLib.get_weather_embed(self.city, selected_date)
-            await interaction.response.edit_message(content=None, embed=embed, view=None)
+            embed = await asyncio.to_thread(weatherLib.get_weather_embed, self.city, selected_date)
+            await interaction.edit_original_response(content=None, embed=embed, view=None)
         except ValueError as error:
-            await interaction.response.edit_message(content=str(error), embed=None, view=None)
+            await interaction.edit_original_response(content=str(error), embed=None, view=None)
         except Exception:
-            await interaction.response.edit_message(
+            logging.exception("Weather request failed")
+            await interaction.edit_original_response(
                 content="Impossible de récupérer la météo pour le moment.",
                 embed=None,
                 view=None,
@@ -56,6 +60,14 @@ class WeatherDateView(discord.ui.View):
 class SlashCommandsCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    async def cog_app_command_error(self, interaction, error):
+        logging.error("Slash command failed", exc_info=(type(error), error, error.__traceback__))
+        text = "Impossible de récupérer les données pour le moment. Réessaie plus tard."
+        if interaction.response.is_done():
+            await interaction.edit_original_response(content=text, embeds=[], view=None)
+        else:
+            await interaction.response.send_message(text, ephemeral=True)
 
     @app_commands.command(name="mennuie", description="Propose 1 jeu Steam à partir des listes de FlugButt.")
     @app_commands.describe(
@@ -74,21 +86,22 @@ class SlashCommandsCog(commands.Cog):
         steam_id: str = STEAM_ID_DEFAULT,
         wish: Optional[app_commands.Choice[int]] = None,
     ):
-        game_rand = steamLib.get_random_game(steam_id)
+        await interaction.response.defer(thinking=True)
+        game_rand = await asyncio.to_thread(steamLib.get_random_game, steam_id)
         wish_value = wish.value if isinstance(wish, app_commands.Choice) else 1
 
         if game_rand is None:
-            await interaction.response.send_message(
-                "Je ne trouve pas de jeu avec cet ID. Les jeux du profil sont privés ?",
-                ephemeral=True,
+            await interaction.edit_original_response(
+                content="Je ne trouve pas de jeu avec cet ID. Les jeux du profil sont privés ?",
             )
             return
 
-        embeds = [steamLib.get_embed(game_rand)]
+        embeds = [await asyncio.to_thread(steamLib.get_embed, game_rand)]
         if wish_value == 1:
-            game_wish = steamLib.get_wishlist_game(steam_id)
-            embeds.append(steamLib.get_embed(game_wish))
-        await interaction.response.send_message(embeds=embeds)
+            game_wish = await asyncio.to_thread(steamLib.get_wishlist_game, steam_id)
+            if game_wish is not None:
+                embeds.append(await asyncio.to_thread(steamLib.get_embed, game_wish))
+        await interaction.edit_original_response(embeds=embeds)
 
     @app_commands.command(name="jaifaim", description="Propose des recettes de Jow.")
     @app_commands.describe(
@@ -100,21 +113,15 @@ class SlashCommandsCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         ingredients: str,
-        nombredeplats: int = 1,
-        couverts: int = 2,
+        nombredeplats: app_commands.Range[int, 1, 5] = 1,
+        couverts: app_commands.Range[int, 1, 100] = 2,
     ):
-        if nombredeplats > 5:
-            nombredeplats = 5
-            await interaction.response.send_message(
-                "Ça fait beaucoup. Voici 5 recettes au hasard",
-                ephemeral=True,
-            )
-            embeds = jowLib.get_recipe_embed(ingredients, nombredeplats, couverts)
-            await interaction.followup.send(embeds=embeds, wait=True)
-            return
-
-        embeds = jowLib.get_recipe_embed(ingredients, nombredeplats, couverts)
-        await interaction.response.send_message(embeds=embeds)
+        await interaction.response.defer(thinking=True)
+        embeds = await asyncio.to_thread(jowLib.get_recipe_embed, ingredients, nombredeplats, couverts)
+        await interaction.edit_original_response(
+            content=None if embeds else "Aucune recette trouvée pour ces ingrédients.",
+            embeds=embeds,
+        )
 
     @app_commands.command(name="jaitresfaim", description="Propose des recettes de HelloFresh.")
     @app_commands.describe(
@@ -131,11 +138,12 @@ class SlashCommandsCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         ingredients: str,
-        facile: Optional[app_commands.Choice[int]],
+        facile: Optional[app_commands.Choice[int]] = None,
     ):
         facile_value = facile.value if isinstance(facile, app_commands.Choice) else 1
-        embeds = hellofreshLib.get_recipe_embed(ingredients, facile_value)
-        await interaction.response.send_message(embeds=embeds)
+        await interaction.response.defer(thinking=True)
+        embeds = await asyncio.to_thread(hellofreshLib.get_recipe_embed, ingredients, facile_value)
+        await interaction.edit_original_response(embeds=embeds)
 
     @app_commands.command(name="meteo", description="Affiche la météo prévue pour un jour donné.")
     @app_commands.describe(
